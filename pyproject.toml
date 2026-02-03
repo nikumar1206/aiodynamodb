@@ -28,11 +28,8 @@ testing = [
 ]
 
 [build-system]
-build-backend = "hatchling.build"
-requires = ["hatchling"]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/aiodynamodb"]
+build-backend = "uv_build"
+requires = ["uv_build>=0.9.28,<0.10.0"]
 
 [tool.ruff]
 line-length = 120
