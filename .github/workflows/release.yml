@@ -73,6 +73,19 @@ jobs:
         with:
           attestations: true
 
+      - name: Generate changelog
+        id: changelog
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %h %s" HEAD)
+          else
+            CHANGELOG=$(git log --pretty=format:"- %h %s" ${LAST_TAG}..HEAD)
+          fi
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create Git tag and GitHub Release
         run: |
           git config user.name "github-actions[bot]"
@@ -88,6 +101,7 @@ jobs:
           body: |
             ## Version ${{ steps.version.outputs.new_version }}
             
-            See commits for details: [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+            ### Changes
+            ${{ steps.changelog.outputs.changelog }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
