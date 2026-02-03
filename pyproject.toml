@@ -1,0 +1,48 @@
+[project]
+authors = [
+  {name = "Nikhil Kumar", email = "nikumar1206@gmail.com"},
+]
+
+dependencies = [
+  "aioboto3>=13.0.0",
+  "aiobotocore>=2.13.0",
+  "pydantic>=2.7.0",
+]
+
+description = "Async DynamoDB ORM with Pydantic"
+name = "aiodynamodb"
+readme = "README.md"
+requires-python = ">=3.12"
+version = "0.1.0"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9.0.2",
+  "pytest-asyncio>=1.3.0",
+  "ruff>=0.14.14",
+]
+
+testing = [
+  "aiomoto>=0.3.0",
+  "moto[dynamodb]>=5.1.0",
+]
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aiodynamodb"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+ignore = ["E501"]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+asyncio_mode = "auto"
+testpaths = ["tests"]

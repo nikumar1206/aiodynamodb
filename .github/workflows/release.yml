@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    branches: [main, release/**]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'push' &&
+      (startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/release/'))
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Determine version bump
+        id: version
+        run: |
+          CURRENT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          IS_RELEASE_BRANCH=$([[ "${{ github.ref }}" == refs/heads/release/* ]] && echo "true" || echo "false")
+          
+          if [ "$IS_RELEASE_BRANCH" = "true" ]; then
+            # On release branch: create prerelease version
+            PRERELEASE_SUFFIX="rc.$(date +%s)"
+            NEW_VERSION="${CURRENT_VERSION}.${PRERELEASE_SUFFIX}"
+            RELEASE_TYPE="prerelease"
+          else
+            # On main: increment patch version
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+            NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+            RELEASE_TYPE="release"
+          fi
+          
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+
+      - name: Update version in pyproject.toml
+        run: |
+          sed -i 's/^version = .*/version = "${{ steps.version.outputs.new_version }}"/' pyproject.toml
+
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml
+          git commit -m "bump: version ${{ steps.version.outputs.current_version }} → ${{ steps.version.outputs.new_version }}"
+          git tag "v${{ steps.version.outputs.new_version }}"
+          git push origin main release/** --follow-tags 2>/dev/null || git push origin --follow-tags
+
+      - name: Build distribution
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.new_version }}
+          prerelease: ${{ steps.version.outputs.release_type == 'prerelease' }}
+          body: |
+            ## Version ${{ steps.version.outputs.new_version }}
+            
+            See commits for details: [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
