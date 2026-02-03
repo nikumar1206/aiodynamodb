@@ -1,7 +1,9 @@
 name: Release
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Test"]
+    types: [completed]
     branches: [main, release/**]
 
 permissions:
@@ -14,9 +16,7 @@ jobs:
     environment:
       name: pypi
       url: https://pypi.org/p/aiodynamodb
-    if: |
-      github.event_name == 'push' &&
-      (startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/release/'))
+    if: github.event.workflow_run.conclusion == 'success'
 
     steps:
       - uses: actions/checkout@v4
