@@ -1,5 +1,5 @@
 """Tests for aiodynamodb."""
 
 
-def test_ci():
+def test_ci() -> None:
     assert True

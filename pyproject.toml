@@ -37,8 +37,15 @@ line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
-ignore = ["E501"]
-select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
+ignore = [
+  "E501",
+  "D107",
+  "D100",
+  "D101",
+  "D104",
+  "ANN401",
+]
+select = ["ALL"]
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
