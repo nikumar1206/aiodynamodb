@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from aiodynamodb.models import DynamoBaseModel
 
 import aioboto3
 
@@ -12,14 +13,17 @@ class DynamoDB(aioboto3.Session):
         async with self.resource('dynamodb') as c:
             yield c
 
-    def scan[T: DynamoBaseModel](self, model: type[T]):
+    def scan[T: DynamoBaseModel](self, table: str, model: type[T]):
         pass
 
-    def query[T: DynamoBaseModel](self, model: type[T]):
+    def query[H, R, T: DynamoBaseModel](self, table: str, hash_key: H, range_key: R | None, model: type[T]) -> T:
         pass
 
-    def get[T: DynamoBaseModel](self, model: type[T]) -> T:
+    def get[H, R, T: DynamoBaseModel](self, table: str, hash_key: H, range_key: R | None, model: type[T]) -> T:
         pass
 
-    def put[T: DynamoBaseModel](self, model: T):
+    def put[T: DynamoBaseModel](self, table: str, model: T):
+        pass
+
+    def delete[H, R](self, table: str, hash_key: H, range_key: R | None):
         pass
