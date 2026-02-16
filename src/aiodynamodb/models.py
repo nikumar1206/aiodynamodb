@@ -7,6 +7,7 @@ from pydantic.main import IncEx
 import json
 
 SERIALIZER = TypeSerializer()
+DESERIALIZER = TypeDeserializer()
 
 
 class DynamoBaseModel(BaseModel):
@@ -45,22 +46,17 @@ class DynamoBaseModel(BaseModel):
         )
         return {k: SERIALIZER.serialize(v) for k, v in _serielized.items()}
 
-    def model_dump_json(
-            self,
+    @classmethod
+    def model_validate(
+            cls,
+            obj: dict[str, Any],
             *,
-            indent: int | None = None,
-            ensure_ascii: bool = False,
-            include: IncEx | None = None,
-            exclude: IncEx | None = None,
+            strict: bool | None = None,
+            extra: ExtraValues | None = None,
+            from_attributes: bool | None = None,
             context: Any | None = None,
             by_alias: bool | None = None,
-            exclude_unset: bool = False,
-            exclude_defaults: bool = False,
-            exclude_none: bool = False,
-            exclude_computed_fields: bool = False,
-            round_trip: bool = False,
-            warnings: bool | Literal['none', 'warn', 'error'] = True,
-            fallback: Callable[[Any], Any] | None = None,
-            serialize_as_any: bool = False,
+            by_name: bool | None = None,
     ):
-        return json.dumps(self.model_dump(mode='json'))
+        return {k: DESERIALIZER.deserialize(v) for k, v in obj}
+

@@ -12,3 +12,4 @@ class DynamoDB(aioboto3.Session):
         async with self.resource('dynamodb') as c:
             yield c
 
+    
