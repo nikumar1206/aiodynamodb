@@ -2,12 +2,10 @@ from typing import Any, Literal, Callable
 
 from pydantic import BaseModel
 
-from boto3.dynamodb.types import TypeSerializer, TypeDeserializer
+from aiodynamodb._seriaizers import DESERIALIZER, SERIALIZER
 from pydantic.main import IncEx
 import json
 
-SERIALIZER = TypeSerializer()
-DESERIALIZER = TypeDeserializer()
 
 
 class DynamoBaseModel(BaseModel):
