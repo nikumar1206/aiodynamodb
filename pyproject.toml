@@ -7,6 +7,7 @@ dependencies = [
   "aioboto3>=13.0.0",
   "aiobotocore>=2.13.0",
   "pydantic>=2.7.0",
+  "types-aioboto3[dynamodb]>=15.5.0",
 ]
 
 description = "Async DynamoDB ORM with Pydantic"
