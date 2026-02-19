@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check branch
-        if: github.base_ref == 'main' && !startsWith(github.head_ref, 'release/')
+        if: github.base_ref == 'main' && github.head_ref != 'release' && !startsWith(github.head_ref, 'release/')
         run: |
-          echo "ERROR: You can only merge to main from a release/* branch."
+          echo "ERROR: You can only merge to main from release or release/* branches."
           exit 1
