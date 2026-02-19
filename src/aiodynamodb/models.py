@@ -9,7 +9,6 @@ class TableMeta:
     table_name: str
     hash_key: str
     range_key: str | None = None
-    region: str = "us-east-1"
     indexes: dict[str, Any] = field(default_factory=dict)
 
 
@@ -34,7 +33,6 @@ def table(name: str, hash_key: str, range_key: str | None = None, region: str = 
             table_name=name,
             hash_key=hash_key,
             range_key=range_key,
-            region=region,
         )
         return cls
 
