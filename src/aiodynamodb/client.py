@@ -1,94 +1,49 @@
 from contextlib import asynccontextmanager
-from aiodynamodb.models import DynamoBaseModel
-from aiodynamodb._seriaizers import SERIALIZER
-from types_aiobotocore_dynamodb.client import DynamoDBClient
-from typing import AsyncContextManager
+from dataclasses import dataclass
 
 import aioboto3
+
+from aiodynamodb.models import DynamoModel
 
 type Key = int | str
 
 
+@dataclass
 class Page[T]:
-    next_key: str
-    items;
-    list[T]
+    items: list[T]
+    last_evaluated_key: dict | None = None
 
 
-class DynamoDB(aioboto3.Session):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class DynamoDB:
+    def __init__(self, session: aioboto3.Session | None = None):
+        self._session = session or aioboto3.Session()
 
     @asynccontextmanager
-    async def client(self) -> AsyncContextManager[DynamoDBClient]:
-        c: DynamoDBClient
-        async with self.resource('dynamodb') as c:
-            yield c
+    async def _resource(self):
+        async with self._session.resource("dynamodb") as resource:
+            yield resource
 
-    async def scan[H: Key, R: Key, T: DynamoBaseModel](
-            self,
-            table: str,
-            model: type[T]
-    ) -> Page[T]:
-        pass
+    async def put(self, item: DynamoModel) -> None:
+        async with self._resource() as resource:
+            table = await resource.Table(item.Meta.table_name)
+            await table.put_item(Item=item.model_dump())
 
-    async def query[H: Key, R: Key, T: DynamoBaseModel](
-            self,
-            table: str,
-            hash_key: str,
-            hash_key_value: H,
-            model: type[T]
-    ) -> Page[T]:
-        pass
-
-    async def get[H: Key, R: Key, T: DynamoBaseModel](
-            self,
-            table: str,
-            hash_key: str,
-            hash_key_value: H,
-            range_key: str | None,
-            range_key_value: R | None,
-            model: type[T]
+    async def get[T: DynamoModel](
+        self,
+        model: type[T],
+        *,
+        hash_key: Key,
+        range_key: Key | None = None,
     ) -> T | None:
-        c: DynamoDBClient
-        key = {hash_key: SERIALIZER(hash_key_value)}
-        if range_key:
-            key[range_key] = SERIALIZER(range_key_value)
-        async with self.client() as c:
-            return await c.get_item(
-                TableName=table,
-                Key=key
-            )
+        meta = model.Meta
+        key = {meta.hash_key: hash_key}
+        if meta.range_key and range_key is not None:
+            key[meta.range_key] = range_key
 
-    async def put[H: Key, R: Key, T: DynamoBaseModel](
-            self,
-            table: str,
-            model: T
-    ) -> None:
-        c: DynamoDBClient
-        key = {hash_key: SERIALIZER(hash_key_value)}
-        if range_key:
-            key[range_key] = SERIALIZER(range_key_value)
-        async with self.client() as c:
-            await c.put_item(
-                TableName=table,
-                Item=model.model_dump()
-            )
-
-    async def delete[H: Key, R: Key](
-            self,
-            table: str,
-            hash_key: str,
-            hash_key_value: H,
-            range_key: str | None,
-            range_key_value: R | None
-    ) -> None:
-        c: DynamoDBClient
-        key = {hash_key: SERIALIZER(hash_key_value)}
-        if range_key:
-            key[range_key] = SERIALIZER(range_key_value)
-        async with self.client() as c:
-            await c.delete_item(
-                TableName=table,
-                Key=key
-            )
+        async with self._resource() as resource:
+            table = await resource.Table(meta.table_name)
+            resp = await table.get_item(Key=key)
+            item = resp.get("Item")
+            if item is None:
+                return None
+            return model.model_validate(item)
