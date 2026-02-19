@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: ["Test"]
     types: [completed]
-    branches: [main, release/**]
+    branches: [main, release/**, release]
 
 permissions:
   contents: write
@@ -39,38 +39,38 @@ jobs:
       - name: Determine version from git
         id: version
         run: |
-         # Get last tag or default to 0.0.0
-         LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-         LAST_VERSION=${LAST_TAG#v}
-         
-         IS_RELEASE_BRANCH=$([[ "${{ github.ref }}" == refs/heads/release/* ]] && echo "true" || echo "false")
-         
-         if [ "$IS_RELEASE_BRANCH" = "true" ]; then
-           # On release branch: handle RC versioning
-           if [[ $LAST_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.rc\.([0-9]+)$ ]]; then
-             # Current version is already RC: bump RC number
-             MAJOR="${BASH_REMATCH[1]}"
-             MINOR="${BASH_REMATCH[2]}"
-             PATCH="${BASH_REMATCH[3]}"
-             RC_NUM="${BASH_REMATCH[4]}"
-             NEW_RC_NUM=$((RC_NUM + 1))
-             NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}.rc.${NEW_RC_NUM}"
-           else
-             # Current version is a release: bump patch and start RC.1
-             IFS='.' read -r MAJOR MINOR PATCH <<< "$LAST_VERSION"
-             NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1)).rc.1"
-           fi
-           RELEASE_TYPE="prerelease"
-         else
-           # On main: increment patch version
-           IFS='.' read -r MAJOR MINOR PATCH <<< "$LAST_VERSION"
-           NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
-           RELEASE_TYPE="release"
-         fi
-         
-         echo "last_version=$LAST_VERSION" >> $GITHUB_OUTPUT
-         echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-         echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+          # Get last tag or default to 0.0.0
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          LAST_VERSION=${LAST_TAG#v}
+
+          IS_RELEASE_BRANCH=$([[ "${{ github.ref }}" == refs/heads/release/* ]] && echo "true" || echo "false")
+
+          if [ "$IS_RELEASE_BRANCH" = "true" ]; then
+            # On release branch: handle RC versioning
+            if [[ $LAST_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.rc\.([0-9]+)$ ]]; then
+              # Current version is already RC: bump RC number
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+              RC_NUM="${BASH_REMATCH[4]}"
+              NEW_RC_NUM=$((RC_NUM + 1))
+              NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}.rc.${NEW_RC_NUM}"
+            else
+              # Current version is a release: bump patch and start RC.1
+              IFS='.' read -r MAJOR MINOR PATCH <<< "$LAST_VERSION"
+              NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1)).rc.1"
+            fi
+            RELEASE_TYPE="prerelease"
+          else
+            # On main: increment patch version
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$LAST_VERSION"
+            NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+            RELEASE_TYPE="release"
+          fi
+
+          echo "last_version=$LAST_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
 
       - name: Update version in pyproject.toml for build
         run: |
@@ -111,7 +111,7 @@ jobs:
           prerelease: ${{ steps.version.outputs.release_type == 'prerelease' }}
           body: |
             ## Version ${{ steps.version.outputs.new_version }}
-            
+
             ### Changes
             ${{ steps.changelog.outputs.changelog }}
         env:
