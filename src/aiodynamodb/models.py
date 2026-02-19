@@ -1,60 +1,41 @@
-from typing import Any, Literal, Callable
+from dataclasses import dataclass, field
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
-from aiodynamodb._seriaizers import DESERIALIZER, SERIALIZER
-from pydantic.main import IncEx
-import json
+
+@dataclass
+class TableMeta:
+    table_name: str
+    hash_key: str
+    range_key: str | None = None
+    region: str = "us-east-1"
+    indexes: dict[str, Any] = field(default_factory=dict)
 
 
+class DynamoModel(BaseModel):
+    """Base for models decorated with @table."""
 
-class DynamoBaseModel(BaseModel):
+    Meta: ClassVar[TableMeta]
 
-    def model_dump(
-            self,
-            *,
-            mode: Literal['json', 'python'] | str = 'python',
-            include: IncEx | None = None,
-            exclude: IncEx | None = None,
-            context: Any | None = None,
-            by_alias: bool | None = None,
-            exclude_unset: bool = False,
-            exclude_defaults: bool = False,
-            exclude_none: bool = False,
-            exclude_computed_fields: bool = False,
-            round_trip: bool = False,
-            warnings: bool | Literal['none', 'warn', 'error'] = True,
-            fallback: Callable[[Any], Any] | None = None,
-            serialize_as_any: bool = False,
-    ):
-        _serielized = super().model_dump(
-            mode,
-            include,
-            exclude,
-            context,
-            by_alias,
-            exclude_unset,
-            exclude_defaults,
-            exclude_none,
-            exclude_computed_fields,
-            round_trip,
-            warnings,
-            fallback,
-            serialize_as_any,
+
+def table(name: str, hash_key: str, range_key: str | None = None, region: str = "us-east-1"):
+    """Decorator that attaches DynamoDB table metadata to a Pydantic model.
+
+    Usage:
+        @table("users", hash_key="user_id")
+        class User(DynamoModel):
+            user_id: str
+            name: str
+    """
+
+    def decorator[T: DynamoModel](cls: type[T]) -> type[T]:
+        cls.Meta = TableMeta(
+            table_name=name,
+            hash_key=hash_key,
+            range_key=range_key,
+            region=region,
         )
-        return {k: SERIALIZER.serialize(v) for k, v in _serielized.items()}
+        return cls
 
-    @classmethod
-    def model_validate(
-            cls,
-            obj: dict[str, Any],
-            *,
-            strict: bool | None = None,
-            extra: ExtraValues | None = None,
-            from_attributes: bool | None = None,
-            context: Any | None = None,
-            by_alias: bool | None = None,
-            by_name: bool | None = None,
-    ):
-        return {k: DESERIALIZER.deserialize(v) for k, v in obj}
-
+    return decorator
