@@ -1,7 +1,10 @@
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from enum import Enum
+from typing import Any, ClassVar, Self
 
 from pydantic import BaseModel
+
+from aiodynamodb._serializers import SERIALIZER, DESERIALIZER
 
 
 @dataclass
@@ -12,13 +15,41 @@ class TableMeta:
     indexes: dict[str, Any] = field(default_factory=dict)
 
 
+class Condition(Enum):
+    eq = "="
+
+
+@dataclass
+class Filter:
+    key: str
+    condition: Condition
+
+
+@dataclass
+class Query:
+    index: str | None
+    hash_key: str
+    range_key: str | None
+    range_key_filter: set[Filter]
+    filter: set[Filter]
+
+
 class DynamoModel(BaseModel):
     """Base for models decorated with @table."""
 
     Meta: ClassVar[TableMeta]
 
+    def to_dynamo(self) -> dict[str, Any]:
+        dumped = self.model_dump(mode="json")
+        return {k: SERIALIZER.serialize(v) for k, v in dumped.items()}
 
-def table(name: str, hash_key: str, range_key: str | None = None, region: str = "us-east-1"):
+    @classmethod
+    def from_dynamo(cls, raw: dict[str, Any]) -> Self:
+        dynamo_dict = {k: DESERIALIZER.serialize(v) for k, v in raw.items()}
+        return cls.model_validate(dynamo_dict)
+
+
+def table(name: str, hash_key: str, range_key: str | None = None):
     """Decorator that attaches DynamoDB table metadata to a Pydantic model.
 
     Usage:

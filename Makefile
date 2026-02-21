@@ -8,8 +8,9 @@ upgrade: ## Upgrade dependencies
 	uv sync --upgrade
 
 .PHONY: test
-test: ## Run tests
+test: install-dev ## Run tests
 	uv run pytest
+	uv run --locked ruff format
 
 .PHONY: build
 build: test ## Run tests and build the package
