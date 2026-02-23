@@ -12,11 +12,22 @@ from aiodynamodb._serializers import SERIALIZER, DESERIALIZER
 
 
 @dataclass
+class GSI:
+    hash_key: str
+    range_key: str | None = None
+
+
+@dataclass
+class LSI:
+    range_key: str
+
+
+@dataclass
 class TableMeta:
     table_name: str
     hash_key: str
     range_key: str | None = None
-    indexes: dict[str, Any] = field(default_factory=dict)
+    indexes: dict[str, GSI | LSI] = field(default_factory=dict)
 
 
 class DynamoModel(BaseModel):
