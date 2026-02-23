@@ -41,12 +41,7 @@ class DynamoDB:
             await table.put_item(Item=item.model_dump())
 
     async def get[T: DynamoModel](
-            self,
-            model: type[T],
-            *,
-            hash_key: KeyT,
-            range_key: KeyT | None = None,
-            consistent_reads: bool = False
+        self, model: type[T], *, hash_key: KeyT, range_key: KeyT | None = None, consistent_reads: bool = False
     ) -> T | None:
         meta = model.Meta
         key = {meta.hash_key: hash_key}
@@ -62,23 +57,22 @@ class DynamoDB:
             return model.model_validate(item)
 
     async def query[T: DynamoModel](
-            self,
-            model: type[T],
-            *,
-            index_name: str | None = None,
-            limit: int | None = None,
-            key_condition_expression: Key | None = None,
-            filter_expression: Attr | None = None,
-            exclusive_start_key: dict[str, TableAttributeValueTypeDef] | None = None,
-            return_consumed_capacity=False,
-            consistent_read: bool = False,
-            scan_index_forward=False
+        self,
+        model: type[T],
+        *,
+        index_name: str | None = None,
+        limit: int | None = None,
+        key_condition_expression: Key | None = None,
+        filter_expression: Attr | None = None,
+        exclusive_start_key: dict[str, TableAttributeValueTypeDef] | None = None,
+        return_consumed_capacity=False,
+        consistent_read: bool = False,
+        scan_index_forward=False,
     ) -> QueryeResult[T]:
         meta = model.Meta
 
         client: DynamoDBClient
         async with self._client() as client:
-
             paginator = client.get_paginator("query")
 
             query_args = dict(
@@ -90,10 +84,9 @@ class DynamoDB:
                 ReturnConsumedCapacity=return_consumed_capacity,
                 FilterExpression=filter_expression,
                 KeyConditionExpression=key_condition_expression,
-                ConsistentRead=consistent_read
+                ConsistentRead=consistent_read,
             )
             async for page in paginator.paginate(**query_args):
                 yield QueryeResult(
-                    items=[model.model_validate(i) for i in page.items],
-                    last_evaluated_key=page.last_evaluated_key
+                    items=[model.model_validate(i) for i in page.items], last_evaluated_key=page.last_evaluated_key
                 )
