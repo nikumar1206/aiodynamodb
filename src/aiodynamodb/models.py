@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, ClassVar, Self
 
-from pydantic import BaseModel
+from boto3.dynamodb.conditions import Key
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_pascal
 
 from aiodynamodb._serializers import SERIALIZER, DESERIALIZER
 
@@ -13,25 +17,6 @@ class TableMeta:
     hash_key: str
     range_key: str | None = None
     indexes: dict[str, Any] = field(default_factory=dict)
-
-
-class Condition(Enum):
-    eq = "="
-
-
-@dataclass
-class Filter:
-    key: str
-    condition: Condition
-
-
-@dataclass
-class Query:
-    index: str | None
-    hash_key: str
-    range_key: str | None
-    range_key_filter: set[Filter]
-    filter: set[Filter]
 
 
 class DynamoModel(BaseModel):
@@ -68,3 +53,9 @@ def table(name: str, hash_key: str, range_key: str | None = None):
         return cls
 
     return decorator
+
+
+@dataclass
+class QueryeResult[T: DynamoModel]:
+    items: list[T]
+    last_evaluated_key: dict[str, Any] | None
