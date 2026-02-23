@@ -56,6 +56,6 @@ def table(name: str, hash_key: str, range_key: str | None = None):
 
 
 @dataclass
-class QueryeResult[T: DynamoModel]:
+class QueryResult[T: DynamoModel]:
     items: list[T]
     last_evaluated_key: dict[str, Any] | None

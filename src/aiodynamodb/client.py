@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from types_aiobotocore_dynamodb.service_resource import Table
     from types_aiobotocore_dynamodb.client import DynamoDBClient
 
-from aiodynamodb.models import DynamoModel, QueryeResult, Query
+from aiodynamodb.models import DynamoModel, QueryResult, Query
 
 type KeyT = int | str
 
@@ -68,7 +68,7 @@ class DynamoDB:
         return_consumed_capacity=False,
         consistent_read: bool = False,
         scan_index_forward=False,
-    ) -> QueryeResult[T]:
+    ) -> QueryResult[T]:
         meta = model.Meta
 
         client: DynamoDBClient
@@ -87,6 +87,6 @@ class DynamoDB:
                 ConsistentRead=consistent_read,
             )
             async for page in paginator.paginate(**query_args):
-                yield QueryeResult(
+                yield QueryResult(
                     items=[model.model_validate(i) for i in page.items], last_evaluated_key=page.last_evaluated_key
                 )
