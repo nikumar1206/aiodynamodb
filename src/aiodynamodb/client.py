@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import aioboto3
 from boto3.dynamodb.conditions import Key, Attr
@@ -12,13 +12,11 @@ from types_aiobotocore_dynamodb.type_defs import (
     LocalSecondaryIndexTypeDef,
 )
 
-from aiodynamodb._serializers import SERIALIZER
-
 if TYPE_CHECKING:
     from types_aiobotocore_dynamodb.service_resource import Table
     from types_aiobotocore_dynamodb.client import DynamoDBClient
 
-from aiodynamodb.models import DynamoModel, QueryResult, Query
+from aiodynamodb.models import DynamoModel, QueryResult
 
 type KeyT = int | str
 
