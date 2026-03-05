@@ -1,3 +1,7 @@
+import botocore
+import pytest
+from boto3.dynamodb.conditions import Attr
+
 from aiodynamodb import DynamoDB, DynamoModel, table
 
 
@@ -28,6 +32,21 @@ async def test_put_and_get(users_table):
         "name": "Alice",
         "email": "alice@example.com",
     }
+
+
+async def test_put_with_condition(users_table):
+    db = DynamoDB()
+
+    user = User(user_id="u1", name="Alice", email="alice@example.com")
+    ex = await db.exceptions
+    with pytest.raises(ex.ConditionalCheckFailedException):
+        await db.put(user, condition_expression=Attr("user_id").exists())
+
+    fetched = await db.get(User, hash_key="u1")
+    assert fetched is None
+    await db.put(user, condition_expression=Attr("user_id").not_exists())
+    fetched = await db.get(User, hash_key="u1")
+    assert fetched == User(user_id="u1", name="Alice", email="alice@example.com")
 
 
 async def test_get_nonexistent(users_table):

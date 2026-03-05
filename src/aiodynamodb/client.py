@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import aioboto3
-from boto3.dynamodb.conditions import Key, Attr
+from boto3.dynamodb.conditions import Key, Attr, ConditionBase
+from types_aiobotocore_dynamodb import DynamoDBServiceResource
 from types_aiobotocore_dynamodb.literals import BillingModeType, TableClassType
 from types_aiobotocore_dynamodb.type_defs import (
     TableAttributeValueTypeDef,
@@ -33,20 +34,31 @@ class DynamoDB:
     def __init__(self, session: aioboto3.Session | None = None):
         self._session = session or aioboto3.Session()
 
+    @property
+    async def exceptions(self):
+        client: DynamoDBClient
+        async with self._session.client("dynamodb") as client:
+            return client.exceptions
+
     @asynccontextmanager
     async def _resource(self):
+        resource: DynamoDBServiceResource
         async with self._session.resource("dynamodb") as resource:
             yield resource
 
     @asynccontextmanager
     async def _client(self):
+        client: DynamoDBClient
         async with self._session.client("dynamodb") as client:
             yield client
 
-    async def put[T: DynamoModel](self, item: T) -> None:
+    async def put[T: DynamoModel](self, item: T, *, condition_expression: ConditionBase = None) -> None:
+        args = {}
+        if condition_expression:
+            args["ConditionExpression"] = condition_expression
         async with self._resource() as resource:
             table: Table = await resource.Table(item.Meta.table_name)
-            await table.put_item(Item=item.model_dump())
+            await table.put_item(Item=item.model_dump(), **args)
 
     async def get[T: DynamoModel](
         self,
