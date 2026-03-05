@@ -26,17 +26,8 @@ from importlib.metadata import PackageNotFoundError, version
 
 from aiodynamodb.client import DynamoDB, Key, Page
 from aiodynamodb.models import (
-    AttributeValue,
-    ComparisonOperator,
-    ConditionalOperator,
-    ConsumedCapacity,
-    DynamoModel,
-    QueryInput,
-    QueryOutput,
-    ReturnConsumedCapacity,
-    Select,
     TableMeta,
-    table,
+    table, DynamoModel,
 )
 
 try:
@@ -52,14 +43,6 @@ __all__ = [
     "Key",
     "TableMeta",
     "Page",
-    "AttributeValue",
-    "ComparisonOperator",
-    "ConditionalOperator",
-    "ConsumedCapacity",
-    "QueryInput",
-    "QueryOutput",
-    "ReturnConsumedCapacity",
-    "Select",
     "table",
     "VERSION",
 ]

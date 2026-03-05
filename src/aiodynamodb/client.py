@@ -58,7 +58,7 @@ class DynamoDB:
 
         async with self._resource() as resource:
             table: Table = await resource.Table(meta.table_name)
-            resp = await table.get_item(Key=key, ConsistentReads=consistent_reads)
+            resp = await table.get_item(Key=key, ConsistentRead=consistent_reads)
             item = resp.get("Item")
             if item is None:
                 return None
