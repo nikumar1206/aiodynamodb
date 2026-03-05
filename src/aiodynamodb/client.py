@@ -101,12 +101,14 @@ class DynamoDB:
                 IndexName=index_name,
                 Limit=limit,
                 ScanIndexForward=scan_index_forward,
-                ExclusiveStartKey=exclusive_start_key,
                 ReturnConsumedCapacity=return_consumed_capacity,
                 FilterExpression=filter_expression,
                 KeyConditionExpression=key_condition_expression,
                 ConsistentRead=consistent_read,
             )
+            if exclusive_start_key:
+                query_args["ExclusiveStartKey"] = exclusive_start_key
+
             async for page in paginator.paginate(**query_args):
                 yield QueryResult(
                     items=[model.model_validate(i) for i in page.items], last_evaluated_key=page.last_evaluated_key
