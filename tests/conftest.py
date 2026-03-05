@@ -4,6 +4,9 @@ import aioboto3
 import pytest
 from aiomoto import mock_aws
 
+from aiodynamodb import DynamoDB
+from tests.entities import User, Order
+
 
 @pytest.fixture(autouse=True)
 def _aws_credentials():
@@ -16,37 +19,19 @@ def _aws_credentials():
 
 
 @pytest.fixture
-async def dynamo_resource():
+async def dynamo_resource() -> DynamoDB:
     """Yield a mocked DynamoDB resource for table creation."""
     async with mock_aws():
-        session = aioboto3.Session()
-        async with session.resource("dynamodb", region_name="us-east-1") as resource:
-            yield resource
+        yield DynamoDB()
 
 
 @pytest.fixture
 async def users_table(dynamo_resource):
-    await dynamo_resource.create_table(
-        TableName="users",
-        KeySchema=[{"AttributeName": "user_id", "KeyType": "HASH"}],
-        AttributeDefinitions=[{"AttributeName": "user_id", "AttributeType": "S"}],
-        BillingMode="PAY_PER_REQUEST",
-    )
+    await dynamo_resource.create_table(User)
     return dynamo_resource
 
 
 @pytest.fixture
 async def orders_table(dynamo_resource):
-    await dynamo_resource.create_table(
-        TableName="orders",
-        KeySchema=[
-            {"AttributeName": "order_id", "KeyType": "HASH"},
-            {"AttributeName": "created_at", "KeyType": "RANGE"},
-        ],
-        AttributeDefinitions=[
-            {"AttributeName": "order_id", "AttributeType": "S"},
-            {"AttributeName": "created_at", "AttributeType": "S"},
-        ],
-        BillingMode="PAY_PER_REQUEST",
-    )
+    await dynamo_resource.create_table(Order)
     return dynamo_resource

@@ -49,16 +49,29 @@ class DynamoDB:
             await table.put_item(Item=item.model_dump())
 
     async def get[T: DynamoModel](
-        self, model: type[T], *, hash_key: KeyT, range_key: KeyT | None = None, consistent_reads: bool = False
+        self,
+        model: type[T],
+        *,
+        hash_key: KeyT,
+        range_key: KeyT | None = None,
+        consistent_reads: bool = False,
+        attributes_to_get: list[str] | None = None,
     ) -> T | None:
         meta = model.Meta
         key = {meta.hash_key: hash_key}
         if meta.range_key and range_key is not None:
             key[meta.range_key] = range_key
 
+        args = dict(
+            Key=key,
+            ConsistentRead=consistent_reads,
+        )
+        if attributes_to_get:
+            args["AttributesToGet"] = attributes_to_get
+
         async with self._resource() as resource:
             table: Table = await resource.Table(meta.table_name)
-            resp = await table.get_item(Key=key, ConsistentRead=consistent_reads)
+            resp = await table.get_item(**args)
             item = resp.get("Item")
             if item is None:
                 return None
@@ -113,11 +126,11 @@ class DynamoDB:
         meta = model.Meta
         key_schema = [{"AttributeName": meta.hash_key, "KeyType": "HASH"}]
         _hash_type = model.__fields__[meta.hash_key].annotation
-        attribute_definitions = {meta.hash_key: _KEY_TO_TYPE[_hash_type]}
+        attribute_definitions = [{"AttributeName": meta.hash_key, "AttributeType": _KEY_TO_TYPE[_hash_type]}]
         if meta.range_key:
             key_schema.append({"AttributeName": meta.range_key, "KeyType": "RANGE"})
             _range_type = model.__fields__[meta.range_key].annotation
-            attribute_definitions[meta.range_key] = _KEY_TO_TYPE[_range_type]
+            attribute_definitions.append({"AttributeName": meta.range_key, "AttributeType": _KEY_TO_TYPE[_range_type]})
 
         request: dict[str, Any] = {
             "TableName": meta.table_name,
@@ -136,5 +149,6 @@ class DynamoDB:
         if table_class:
             request["TableClass"] = table_class
 
+        client: DynamoDBClient
         async with self._client() as client:
             return await client.create_table(**request)
