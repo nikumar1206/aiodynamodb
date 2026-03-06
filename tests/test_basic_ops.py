@@ -173,6 +173,7 @@ async def test_query_applies_filter_expression(orders_table):
 
     assert [item.total for item in filtered] == [200, 300]
 
+
 async def test_query_index(orders_table):
     db = DynamoDB()
 
@@ -211,4 +212,3 @@ async def test_query_lsi_index(orders_table):
         filtered.extend(page.items)
 
     assert [item.total for item in filtered] == [200, 300]
-

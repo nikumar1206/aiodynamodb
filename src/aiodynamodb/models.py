@@ -36,7 +36,7 @@ class GSI:
             "KeySchema": [
                 {"AttributeName": self.hash_key, "KeyType": "HASH"},
             ],
-            "Projection": {"ProjectionType": self.projection}
+            "Projection": {"ProjectionType": self.projection},
         }
         if self.provisioned_throughput:
             _dict["ProvisionedThroughputTypeDef"] = self.provisioned_throughput
@@ -68,7 +68,7 @@ class LSI:
             "IndexName": self.name,
             "KeySchema": [
                 {"AttributeName": hash_key, "KeyType": "HASH"},
-                {"AttributeName": self.range_key, "KeyType": "RANGE"}
+                {"AttributeName": self.range_key, "KeyType": "RANGE"},
             ],
             "Projection": {"ProjectionType": self.projection},
         }
@@ -130,7 +130,7 @@ def table(name: str, hash_key: str, range_key: str | None = None, indexes: list[
             hash_key=hash_key,
             range_key=range_key,
             global_secondary_indexes={i.name: i for i in idxs if isinstance(i, GSI)},
-            local_secondary_indexes={i.name: i for i in idxs if isinstance(i, LSI)}
+            local_secondary_indexes={i.name: i for i in idxs if isinstance(i, LSI)},
         )
         return cls
 
