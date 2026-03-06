@@ -1,22 +1,8 @@
-import botocore
 import pytest
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, Key
 
-from aiodynamodb import DynamoDB, DynamoModel, table
-
-
-@table("users", hash_key="user_id")
-class User(DynamoModel):
-    user_id: str
-    name: str
-    email: str | None = None
-
-
-@table("orders", hash_key="order_id", range_key="created_at")
-class Order(DynamoModel):
-    order_id: str
-    created_at: str
-    total: int
+from aiodynamodb import DynamoDB
+from tests.entities import Order, User
 
 
 async def test_put_and_get(users_table):
@@ -107,3 +93,122 @@ async def test_composite_key_different_range_keys(orders_table):
         "created_at": "2026-01-02",
         "total": 200,
     }
+
+
+async def test_query_returns_paginated_results(orders_table):
+    db = DynamoDB()
+
+    await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
+    await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
+    await db.put(Order(order_id="o1", created_at="2026-01-03", total=300))
+    await db.put(Order(order_id="o2", created_at="2026-01-01", total=999))
+
+    pages = []
+    async for page in db.query(
+        Order,
+        key_condition_expression=Key("order_id").eq("o1"),
+        limit=2,
+        scan_index_forward=True,
+    ):
+        pages.append(page)
+
+    assert len(pages) == 2
+    assert pages[0].last_evaluated_key is not None
+    assert pages[1].last_evaluated_key is None
+    assert [item.created_at for page in pages for item in page.items] == [
+        "2026-01-01",
+        "2026-01-02",
+        "2026-01-03",
+    ]
+
+
+async def test_query_supports_exclusive_start_key(orders_table):
+    db = DynamoDB()
+
+    await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
+    await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
+    await db.put(Order(order_id="o1", created_at="2026-01-03", total=300))
+
+    first_page = None
+    async for page in db.query(
+        Order,
+        key_condition_expression=Key("order_id").eq("o1"),
+        limit=1,
+        scan_index_forward=True,
+    ):
+        first_page = page
+        break
+
+    assert first_page is not None
+    assert first_page.last_evaluated_key is not None
+    assert [item.created_at for item in first_page.items] == ["2026-01-01"]
+
+    remaining = []
+    async for page in db.query(
+        Order,
+        key_condition_expression=Key("order_id").eq("o1"),
+        exclusive_start_key=first_page.last_evaluated_key,
+        scan_index_forward=True,
+    ):
+        remaining.extend(page.items)
+
+    assert [item.created_at for item in remaining] == ["2026-01-02", "2026-01-03"]
+
+
+async def test_query_applies_filter_expression(orders_table):
+    db = DynamoDB()
+
+    await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
+    await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
+    await db.put(Order(order_id="o1", created_at="2026-01-03", total=300))
+
+    filtered = []
+    async for page in db.query(
+        Order,
+        key_condition_expression=Key("order_id").eq("o1"),
+        filter_expression=Attr("total").gte(200),
+        scan_index_forward=True,
+    ):
+        filtered.extend(page.items)
+
+    assert [item.total for item in filtered] == [200, 300]
+
+async def test_query_index(orders_table):
+    db = DynamoDB()
+
+    await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
+    await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
+    await db.put(Order(order_id="o1", created_at="2026-01-03", total=300))
+
+    filtered = []
+    async for page in db.query(
+        Order,
+        index_name="order_gsi",
+        key_condition_expression=Key("order_id").eq("o1"),
+        filter_expression=Attr("total").gte(200),
+        scan_index_forward=True,
+    ):
+        filtered.extend(page.items)
+
+    assert [item.total for item in filtered] == [200, 300]
+
+
+async def test_query_lsi_index(orders_table):
+    db = DynamoDB()
+
+    await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
+    await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
+    await db.put(Order(order_id="o1", created_at="2026-01-03", total=300))
+
+    filtered = []
+    async for page in db.query(
+        Order,
+        index_name="order_lsi",
+        key_condition_expression=Key("order_id").eq("o1"),
+        filter_expression=Attr("total").gte(200),
+        scan_index_forward=True,
+    ):
+        filtered.extend(page.items)
+
+    assert [item.total for item in filtered] == [200, 300]
+

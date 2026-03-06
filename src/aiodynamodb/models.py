@@ -1,33 +1,91 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, ClassVar, Self
 
-from boto3.dynamodb.conditions import Key
-from pydantic import BaseModel, ConfigDict
-from pydantic.alias_generators import to_pascal
+from pydantic import BaseModel
+from types_aiobotocore_dynamodb.literals import ProjectionTypeType
+from types_aiobotocore_dynamodb.type_defs import (
+    GlobalSecondaryIndexUnionTypeDef,
+    LocalSecondaryIndexTypeDef,
+    OnDemandThroughputTypeDef,
+    ProvisionedThroughputTypeDef,
+    WarmThroughputTypeDef,
+)
 
-from aiodynamodb._serializers import SERIALIZER, DESERIALIZER
+from aiodynamodb._serializers import DESERIALIZER, SERIALIZER
 
 
 @dataclass
 class GSI:
+    """Global secondary index definition used in ``@table(..., indexes=[...])``."""
+
+    name: str
     hash_key: str
     range_key: str | None = None
+    projection: ProjectionTypeType = "ALL"
+    non_key_attributes: list[str] | None = None
+    provisioned_throughput: None | ProvisionedThroughputTypeDef = None
+    on_demand_throughput: None | OnDemandThroughputTypeDef = None
+    warm_throughput: None | WarmThroughputTypeDef = None
+
+    def to_dynamo(self) -> GlobalSecondaryIndexUnionTypeDef:
+        """Serialize this GSI definition to DynamoDB ``create_table`` format."""
+        _dict: GlobalSecondaryIndexUnionTypeDef = {
+            "IndexName": self.name,
+            "KeySchema": [
+                {"AttributeName": self.hash_key, "KeyType": "HASH"},
+            ],
+            "Projection": {"ProjectionType": self.projection}
+        }
+        if self.provisioned_throughput:
+            _dict["ProvisionedThroughputTypeDef"] = self.provisioned_throughput
+        if self.range_key:
+            _dict["KeySchema"].append({"AttributeName": self.range_key, "KeyType": "RANGE"})
+        if self.non_key_attributes:
+            _dict["Projection"]["NonKeyAttributes"] = self.non_key_attributes
+        if self.provisioned_throughput:
+            _dict["ProvisionedThroughput"] = self.provisioned_throughput
+        if self.on_demand_throughput:
+            _dict["OnDemandThroughput"] = self.on_demand_throughput
+        if self.warm_throughput:
+            _dict["WarmThroughput"] = self.warm_throughput
+        return _dict
 
 
 @dataclass
 class LSI:
+    """Local secondary index definition used in ``@table(..., indexes=[...])``."""
+
+    name: str
     range_key: str
+    projection: ProjectionTypeType = "ALL"
+    non_key_attributes: list[str] | None = None
+
+    def to_dynamo(self, hash_key: str) -> LocalSecondaryIndexTypeDef:
+        """Serialize this LSI definition to DynamoDB ``create_table`` format."""
+        _dict: LocalSecondaryIndexTypeDef = {
+            "IndexName": self.name,
+            "KeySchema": [
+                {"AttributeName": hash_key, "KeyType": "HASH"},
+                {"AttributeName": self.range_key, "KeyType": "RANGE"}
+            ],
+            "Projection": {"ProjectionType": self.projection},
+        }
+        if self.non_key_attributes:
+            _dict["Projection"]["NonKeyAttributes"] = self.non_key_attributes
+        return _dict
 
 
 @dataclass
 class TableMeta:
+    """Model-to-table metadata attached by the ``@table`` decorator."""
+
     table_name: str
     hash_key: str
     range_key: str | None = None
-    indexes: dict[str, GSI | LSI] = field(default_factory=dict)
+    global_secondary_indexes: dict[str, GSI] = field(default_factory=dict)
+    local_secondary_indexes: dict[str, LSI] = field(default_factory=dict)
 
 
 class DynamoModel(BaseModel):
@@ -36,16 +94,18 @@ class DynamoModel(BaseModel):
     Meta: ClassVar[TableMeta]
 
     def to_dynamo(self) -> dict[str, Any]:
+        """Serialize model fields to DynamoDB AttributeValue objects."""
         dumped = self.model_dump(mode="json")
-        return {k: SERIALIZER.serialize(v) for k, v in dumped.items()}
+        return {k: SERIALIZER.to_dynamo(v) for k, v in dumped.items()}
 
     @classmethod
     def from_dynamo(cls, raw: dict[str, Any]) -> Self:
-        dynamo_dict = {k: DESERIALIZER.serialize(v) for k, v in raw.items()}
+        """Deserialize DynamoDB AttributeValue objects into a model instance."""
+        dynamo_dict = {k: DESERIALIZER.to_dynamo(v) for k, v in raw.items()}
         return cls.model_validate(dynamo_dict)
 
 
-def table(name: str, hash_key: str, range_key: str | None = None):
+def table(name: str, hash_key: str, range_key: str | None = None, indexes: list[GSI | LSI] | None = None):
     """Decorator that attaches DynamoDB table metadata to a Pydantic model.
 
     Usage:
@@ -53,20 +113,38 @@ def table(name: str, hash_key: str, range_key: str | None = None):
         class User(DynamoModel):
             user_id: str
             name: str
+
+    Args:
+        name: DynamoDB table name.
+        hash_key: Partition key field name.
+        range_key: Optional sort key field name.
+        indexes: Optional list of ``GSI`` and ``LSI`` metadata objects.
     """
 
     def decorator[T: DynamoModel](cls: type[T]) -> type[T]:
+        idxs = indexes or []
+        _validate_index_names(idxs, GSI)
+        _validate_index_names(idxs, LSI)
         cls.Meta = TableMeta(
             table_name=name,
             hash_key=hash_key,
             range_key=range_key,
+            global_secondary_indexes={i.name: i for i in idxs if isinstance(i, GSI)},
+            local_secondary_indexes={i.name: i for i in idxs if isinstance(i, LSI)}
         )
         return cls
+
+    def _validate_index_names(_indexes: list[LSI | GSI], index_type: type[GSI | LSI]):
+        index_names = [i.name for i in _indexes if isinstance(i, index_type)]
+        if len(index_names) != len(set(index_names)):
+            raise ValueError("Index names must be unique")
 
     return decorator
 
 
 @dataclass
 class QueryResult[T: DynamoModel]:
+    """One page of typed query results."""
+
     items: list[T]
     last_evaluated_key: dict[str, Any] | None
