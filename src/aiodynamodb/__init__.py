@@ -26,9 +26,9 @@ from importlib.metadata import PackageNotFoundError, version
 
 from aiodynamodb.client import DynamoDB, Key, Page
 from aiodynamodb.models import (
+    DynamoModel,
     TableMeta,
     table,
-    DynamoModel,
 )
 
 try:

@@ -1,4 +1,4 @@
-from aiodynamodb import table, DynamoModel
+from aiodynamodb import DynamoModel, table
 from aiodynamodb.models import GSI, LSI
 
 

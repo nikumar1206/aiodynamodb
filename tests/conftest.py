@@ -1,11 +1,10 @@
 import os
 
-import aioboto3
 import pytest
 from aiomoto import mock_aws
 
 from aiodynamodb import DynamoDB
-from tests.entities import User, Order
+from tests.entities import Order, User
 
 
 @pytest.fixture(autouse=True)
