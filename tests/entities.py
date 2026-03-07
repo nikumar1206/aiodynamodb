@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 from aiodynamodb import DynamoModel, table
@@ -43,6 +45,6 @@ class Basket(BaseModel):
 @table("orders", hash_key="order_id", range_key="created_at", indexes=[order_gsi, order_lsi])
 class ComplexOrder(DynamoModel):
     order_id: str
-    created_at: str
+    created_at: datetime
     total: int
     basket: Basket

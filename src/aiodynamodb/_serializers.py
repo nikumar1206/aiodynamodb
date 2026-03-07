@@ -1,29 +1,32 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 
 
-def _cast_float_to_decimal(value: Any) -> Any:
+def _serilize_dynamo_primitives(value: Any) -> Any:
     """Recursively cast ``float`` values to ``Decimal`` for DynamoDB numbers."""
     if isinstance(value, float):
         return Decimal(str(value))
+    if isinstance(value, datetime):
+        return int(value.timestamp())
     if isinstance(value, list):
-        return [_cast_float_to_decimal(v) for v in value]
+        return [_serilize_dynamo_primitives(v) for v in value]
     if isinstance(value, tuple):
-        return [_cast_float_to_decimal(v) for v in value]
+        return [_serilize_dynamo_primitives(v) for v in value]
     if isinstance(value, set):
-        return {_cast_float_to_decimal(v) for v in value}
+        return {_serilize_dynamo_primitives(v) for v in value}
     if isinstance(value, dict):
-        return {k: _cast_float_to_decimal(v) for k, v in value.items()}
+        return {k: _serilize_dynamo_primitives(v) for k, v in value.items()}
     return value
 
 
 def to_dynamo_compatible(value: Any) -> Any:
     """Convert python values into forms accepted by boto DynamoDB serializers."""
-    return _cast_float_to_decimal(value)
+    return _serilize_dynamo_primitives(value)
 
 
 class DynamoSerializer:
@@ -33,7 +36,7 @@ class DynamoSerializer:
         self._serializer = TypeSerializer()
 
     def _to_dynamo(self, value: Any) -> dict[str, Any]:
-        return self._serializer.serialize(_cast_float_to_decimal(value))
+        return self._serializer.serialize(_serilize_dynamo_primitives(value))
 
     def serialize(self, value: Any) -> dict[str, Any]:
         return self._to_dynamo(value)

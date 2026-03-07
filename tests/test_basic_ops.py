@@ -1,5 +1,8 @@
+from datetime import datetime
+
 import pytest
 from boto3.dynamodb.conditions import Attr, Key
+from pydantic_core import TzInfo
 
 from aiodynamodb import DynamoDB
 from tests.entities import Basket, ComplexOrder, Item, Order, User
@@ -217,9 +220,30 @@ async def test_query_lsi_index(orders_table):
 async def test_complex_item(complex_order_table):
     db = DynamoDB()
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
-    await db.put(ComplexOrder(order_id="o1", created_at="2026-01-01", total=100, basket=basket))
-    await db.put(ComplexOrder(order_id="o1", created_at="2026-01-02", total=200, basket=basket))
-    await db.put(ComplexOrder(order_id="o1", created_at="2026-01-03", total=300, basket=basket))
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            total=100,
+            basket=basket
+        )
+    )
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 2, tzinfo=TzInfo(0)),
+            total=200,
+            basket=basket
+        )
+    )
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
+            total=300,
+            basket=basket
+        )
+    )
 
     filtered = []
     async for page in db.query(
@@ -234,7 +258,7 @@ async def test_complex_item(complex_order_table):
     assert filtered == [
         ComplexOrder(
             order_id='o1',
-            created_at='2026-01-02',
+            created_at=datetime(2020, 1, 2, tzinfo=TzInfo(0)),
             total=200,
             basket=Basket(
                 items=[
@@ -244,7 +268,7 @@ async def test_complex_item(complex_order_table):
         ),
         ComplexOrder(
             order_id='o1',
-            created_at='2026-01-03',
+            created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
             total=300,
                      basket=Basket(
                          items=[

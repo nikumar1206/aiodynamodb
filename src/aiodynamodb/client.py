@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, get_args, get_origin
 
@@ -27,7 +28,7 @@ from aiodynamodb.models import DynamoModel, QueryResult
 
 type KeyT = int | str
 
-_KEY_TO_TYPE = {str: "S", bytes: "B", int: "N", float: "N"}
+_KEY_TO_TYPE = {str: "S", bytes: "B", int: "N", datetime: "N", float: "N"}
 
 
 def _resolve_key_annotation(annotation: Any) -> type:
