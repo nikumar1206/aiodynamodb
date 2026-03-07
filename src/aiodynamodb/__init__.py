@@ -25,7 +25,11 @@ Example:
 from importlib.metadata import PackageNotFoundError, version
 
 from aiodynamodb.client import DynamoDB, Key, Page
-from aiodynamodb.models import DynamoModel, TableMeta, table
+from aiodynamodb.models import (
+    DynamoModel,
+    TableMeta,
+    table,
+)
 
 try:
     __version__ = version("aiodynamodb")
