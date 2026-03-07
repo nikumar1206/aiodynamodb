@@ -30,7 +30,12 @@ class GSI:
     warm_throughput: None | WarmThroughputTypeDef = None
 
     def to_dynamo(self) -> GlobalSecondaryIndexUnionTypeDef:
-        """Serialize this GSI definition to DynamoDB ``create_table`` format."""
+        """Serialize this GSI definition to DynamoDB ``create_table`` format.
+
+        Returns:
+            A ``GlobalSecondaryIndexes`` entry compatible with
+            ``CreateTable``.
+        """
         _dict: GlobalSecondaryIndexUnionTypeDef = {
             "IndexName": self.name,
             "KeySchema": [
@@ -63,7 +68,14 @@ class LSI:
     non_key_attributes: list[str] | None = None
 
     def to_dynamo(self, hash_key: str) -> LocalSecondaryIndexTypeDef:
-        """Serialize this LSI definition to DynamoDB ``create_table`` format."""
+        """Serialize this LSI definition to DynamoDB ``create_table`` format.
+
+        Args:
+            hash_key: Table hash key name required in every LSI key schema.
+
+        Returns:
+            A ``LocalSecondaryIndexes`` entry compatible with ``CreateTable``.
+        """
         _dict: LocalSecondaryIndexTypeDef = {
             "IndexName": self.name,
             "KeySchema": [
@@ -119,6 +131,7 @@ def table(name: str, hash_key: str, range_key: str | None = None, indexes: list[
         hash_key: Partition key field name.
         range_key: Optional sort key field name.
         indexes: Optional list of ``GSI`` and ``LSI`` metadata objects.
+            Names must be unique per index type.
     """
 
     def decorator[T: DynamoModel](cls: type[T]) -> type[T]:
@@ -135,6 +148,7 @@ def table(name: str, hash_key: str, range_key: str | None = None, indexes: list[
         return cls
 
     def _validate_index_names(_indexes: list[LSI | GSI], index_type: type[GSI | LSI]):
+        """Ensure index names are unique within a single index type."""
         index_names = [i.name for i in _indexes if isinstance(i, index_type)]
         if len(index_names) != len(set(index_names)):
             raise ValueError("Index names must be unique")

@@ -80,6 +80,66 @@ Decorator arguments:
 - `hash_key`: partition key field name
 - `range_key`: optional sort key field name
 
+### Indexes (GSI and LSI)
+
+Define indexes on the model via the `indexes` argument to `@table(...)`.
+
+```python
+from aiodynamodb import DynamoModel, table
+from aiodynamodb.models import GSI, LSI
+
+
+order_gsi = GSI(
+    name="order_gsi",
+    hash_key="order_id",
+    range_key="total",
+)
+
+order_lsi = LSI(
+    name="order_lsi",
+    range_key="total",
+)
+
+
+@table(
+    "orders",
+    hash_key="order_id",
+    range_key="created_at",
+    indexes=[order_gsi, order_lsi],
+)
+class Order(DynamoModel):
+    order_id: str
+    created_at: str
+    total: int
+```
+
+Query a GSI:
+
+```python
+from boto3.dynamodb.conditions import Key
+
+async for page in db.query(
+    Order,
+    index_name="order_gsi",
+    key_condition_expression=Key("order_id").eq("o1"),
+):
+    print(page.items)
+```
+
+Query an LSI:
+
+```python
+from boto3.dynamodb.conditions import Attr, Key
+
+async for page in db.query(
+    Order,
+    index_name="order_lsi",
+    key_condition_expression=Key("order_id").eq("o1"),
+    filter_expression=Attr("total").gte(200),
+):
+    print(page.items)
+```
+
 ## Client API
 
 Instantiate once and reuse:
@@ -189,10 +249,11 @@ await db.delete_table(User)
 
 - `billing_mode`
 - `provisioned_throughput`
-- `global_secondary_indexes`
-- `local_secondary_indexes`
 - `tags`
 - `table_class`
+
+Global and local secondary indexes are taken from model metadata
+(`@table(..., indexes=[...])`).
 
 ### `exceptions`
 
