@@ -12,6 +12,8 @@ from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 from types_aiobotocore_dynamodb import DynamoDBServiceResource
 from types_aiobotocore_dynamodb.literals import BillingModeType, TableClassType
 from types_aiobotocore_dynamodb.type_defs import (
+    CreateGlobalTableInputTypeDef,
+    CreateGlobalTableOutputTypeDef,
     CreateTableInputTypeDef,
     CreateTableOutputTypeDef,
     DeleteTableOutputTypeDef,
@@ -24,11 +26,12 @@ if TYPE_CHECKING:
     from types_aiobotocore_dynamodb.service_resource import Table
 
 from aiodynamodb._serializers import to_dynamo_compatible
+from aiodynamodb.custom_types import Timestamp
 from aiodynamodb.models import DynamoModel, QueryResult
 
 type KeyT = int | str
 
-_KEY_TO_TYPE = {str: "S", bytes: "B", int: "N", datetime: "N", float: "N"}
+_KEY_TO_TYPE = {str: "S", bytes: "B", int: "N", datetime: "S", float: "N", Timestamp: "N"}
 
 
 def _resolve_key_annotation(annotation: Any) -> type:
@@ -103,13 +106,13 @@ class DynamoDB:
             await table.delete_item(Item=to_dynamo_compatible(item.model_dump()), **args)
 
     async def get[T: DynamoModel](
-        self,
-        model: type[T],
-        *,
-        hash_key: KeyT,
-        range_key: KeyT | None = None,
-        consistent_reads: bool = False,
-        attributes_to_get: list[str] | None = None,
+            self,
+            model: type[T],
+            *,
+            hash_key: KeyT,
+            range_key: KeyT | None = None,
+            consistent_reads: bool = False,
+            attributes_to_get: list[str] | None = None,
     ) -> T | None:
         """Get a single item by primary key.
 
@@ -144,17 +147,17 @@ class DynamoDB:
             return model.model_validate(item)
 
     async def query[T: DynamoModel](
-        self,
-        model: type[T],
-        *,
-        index_name: str | None = None,
-        limit: int | None = None,
-        key_condition_expression: Key | None = None,
-        filter_expression: Attr | None = None,
-        exclusive_start_key: dict[str, TableAttributeValueTypeDef] | None = None,
-        return_consumed_capacity=False,
-        consistent_read: bool = False,
-        scan_index_forward=False,
+            self,
+            model: type[T],
+            *,
+            index_name: str | None = None,
+            limit: int | None = None,
+            key_condition_expression: Key | None = None,
+            filter_expression: Attr | None = None,
+            exclusive_start_key: dict[str, TableAttributeValueTypeDef] | None = None,
+            return_consumed_capacity=False,
+            consistent_read: bool = False,
+            scan_index_forward=False,
     ) -> AsyncIterator[QueryResult[T]]:
         """Query items and yield paginated results.
 
@@ -207,13 +210,13 @@ class DynamoDB:
                 query_args["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
     async def create_table[T: DynamoModel](
-        self,
-        model: type[T],
-        *,
-        billing_mode: BillingModeType = "PAY_PER_REQUEST",
-        provisioned_throughput: ProvisionedThroughputTypeDef | None = None,
-        tags: list[dict[str, str]] | None = None,
-        table_class: TableClassType | None = None,
+            self,
+            model: type[T],
+            *,
+            billing_mode: BillingModeType = "PAY_PER_REQUEST",
+            provisioned_throughput: ProvisionedThroughputTypeDef | None = None,
+            tags: list[dict[str, str]] | None = None,
+            table_class: TableClassType | None = None,
     ) -> CreateTableOutputTypeDef:
         """Create a table for a ``DynamoModel`` definition.
 
@@ -281,6 +284,32 @@ class DynamoDB:
         client: DynamoDBClient
         async with self._client() as client:
             return await client.create_table(**request)
+
+    async def create_global_table[T: DynamoModel](
+            self,
+            model: type[T],
+            *,
+            regions: list[str]
+    ) -> CreateGlobalTableOutputTypeDef:
+        """Creates a global table from an existing table.
+
+        Args:
+            model: ``DynamoModel`` subclass containing table metadata.
+            regions: the list of replica regions
+
+        Returns:
+            Raw ``create_global_table`` response from the DynamoDB API.
+        """
+        meta = model.Meta
+
+        request: CreateGlobalTableInputTypeDef = {
+            "GlobalTableName": meta.table_name,
+            "ReplicationGroup": [{"RegionName": r} for r in regions]
+        }
+
+        client: DynamoDBClient
+        async with self._client() as client:
+            return await client.create_global_table(**request)
 
     async def delete_table[T: DynamoModel](self, model: type[T]) -> DeleteTableOutputTypeDef:
         """Delete the table associated with a ``DynamoModel``.

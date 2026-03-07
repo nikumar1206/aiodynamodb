@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -11,8 +10,6 @@ def _serilize_dynamo_primitives(value: Any) -> Any:
     """Recursively cast ``float`` values to ``Decimal`` for DynamoDB numbers."""
     if isinstance(value, float):
         return Decimal(str(value))
-    if isinstance(value, datetime):
-        return int(value.timestamp())
     if isinstance(value, list):
         return [_serilize_dynamo_primitives(v) for v in value]
     if isinstance(value, tuple):

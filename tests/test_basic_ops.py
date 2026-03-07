@@ -1,11 +1,55 @@
+from contextlib import asynccontextmanager
 from datetime import datetime
+from unittest.mock import AsyncMock
 
 import pytest
 from boto3.dynamodb.conditions import Attr, Key
 from pydantic_core import TzInfo
+from types_aiobotocore_dynamodb import DynamoDBClient
 
 from aiodynamodb import DynamoDB
 from tests.entities import Basket, ComplexOrder, Item, Order, User
+
+
+async def test_create_global_table_uses_model_table_name_and_regions():
+    db = DynamoDB()
+    mock_client = AsyncMock()
+    expected = {"GlobalTableDescription": {"GlobalTableName": Order.Meta.table_name}}
+    mock_client.create_global_table.return_value = expected
+
+    @asynccontextmanager
+    async def fake_client():
+        yield mock_client
+
+    db._client = fake_client  # type: ignore[method-assign]
+
+    resp = await db.create_global_table(Order, regions=["us-east-1", "eu-west-1"])
+
+    assert resp == expected
+    mock_client.create_global_table.assert_awaited_once_with(
+        GlobalTableName=Order.Meta.table_name,
+        ReplicationGroup=[{"RegionName": "us-east-1"}, {"RegionName": "eu-west-1"}],
+    )
+
+
+async def test_create_global_table_with_no_regions_sends_empty_replication_group():
+    db = DynamoDB()
+    mock_client = AsyncMock()
+    mock_client.create_global_table.return_value = {
+        "GlobalTableDescription": {"GlobalTableName": Order.Meta.table_name}}
+
+    @asynccontextmanager
+    async def fake_client():
+        yield mock_client
+
+    db._client = fake_client  # type: ignore[method-assign]
+
+    await db.create_global_table(Order, regions=[])
+
+    mock_client.create_global_table.assert_awaited_once_with(
+        GlobalTableName=Order.Meta.table_name,
+        ReplicationGroup=[],
+    )
 
 
 async def test_put_and_get(users_table):
@@ -270,10 +314,55 @@ async def test_complex_item(complex_order_table):
             order_id='o1',
             created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
             total=300,
-                     basket=Basket(
-                         items=[
-                             Item(qty=1, price=10.9, name='foo')
-                         ]
-                     )
+            basket=Basket(
+                items=[
+                    Item(qty=1, price=10.9, name='foo')
+                ]
+            )
         )
     ]
+
+
+async def test_items_are_stored_in_the_correct_raw_format(complex_order_table):
+    db = DynamoDB()
+    basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
+            total=300,
+            basket=basket
+        )
+    )
+
+    c: DynamoDBClient
+    async with db._client() as c:
+        meta = ComplexOrder.Meta
+        key = {
+            meta.hash_key: {"S": "o1"},
+            meta.range_key: {"N": str(int(datetime(2020, 1, 3, tzinfo=TzInfo(0)).timestamp()))}
+        }
+
+        actual = await c.get_item(TableName=meta.table_name, Key=key)\
+
+    expected_item = {
+        'basket': {
+            'M': {
+                'items': {
+                    'L': [
+                        {
+                            'M': {
+                                'name': {'S': 'foo'},
+                                'price': {'N': '10.9'},
+                                'qty': {'N': '1'}
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        'created_at': {'N': '1578009600'},
+        'order_id': {'S': 'o1'},
+        'total': {'N': '300'}
+    }
+    assert actual["Item"] == expected_item
