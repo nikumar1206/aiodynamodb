@@ -108,12 +108,12 @@ class DynamoModel(BaseModel):
     def to_dynamo(self) -> dict[str, Any]:
         """Serialize model fields to DynamoDB AttributeValue objects."""
         dumped = self.model_dump(mode="json")
-        return {k: SERIALIZER.to_dynamo(v) for k, v in dumped.items()}
+        return {k: SERIALIZER._to_dynamo(v) for k, v in dumped.items()}
 
     @classmethod
     def from_dynamo(cls, raw: dict[str, Any]) -> Self:
         """Deserialize DynamoDB AttributeValue objects into a model instance."""
-        dynamo_dict = {k: DESERIALIZER.to_dynamo(v) for k, v in raw.items()}
+        dynamo_dict = {k: DESERIALIZER._to_dynamo(v) for k, v in raw.items()}
         return cls.model_validate(dynamo_dict)
 
 

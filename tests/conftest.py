@@ -4,7 +4,7 @@ import pytest
 from aiomoto import mock_aws
 
 from aiodynamodb import DynamoDB
-from tests.entities import Order, User
+from tests.entities import ComplexOrder, Order, User
 
 
 @pytest.fixture(autouse=True)
@@ -33,4 +33,10 @@ async def users_table(dynamo_resource):
 @pytest.fixture
 async def orders_table(dynamo_resource):
     await dynamo_resource.create_table(Order)
+    return dynamo_resource
+
+
+@pytest.fixture
+async def complex_order_table(dynamo_resource):
+    await dynamo_resource.create_table(ComplexOrder)
     return dynamo_resource

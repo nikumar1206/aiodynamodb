@@ -2,7 +2,7 @@ import pytest
 from boto3.dynamodb.conditions import Attr, Key
 
 from aiodynamodb import DynamoDB
-from tests.entities import Order, User
+from tests.entities import Basket, ComplexOrder, Item, Order, User
 
 
 async def test_put_and_get(users_table):
@@ -105,10 +105,10 @@ async def test_query_returns_paginated_results(orders_table):
 
     pages = []
     async for page in db.query(
-        Order,
-        key_condition_expression=Key("order_id").eq("o1"),
-        limit=2,
-        scan_index_forward=True,
+            Order,
+            key_condition_expression=Key("order_id").eq("o1"),
+            limit=2,
+            scan_index_forward=True,
     ):
         pages.append(page)
 
@@ -131,10 +131,10 @@ async def test_query_supports_exclusive_start_key(orders_table):
 
     first_page = None
     async for page in db.query(
-        Order,
-        key_condition_expression=Key("order_id").eq("o1"),
-        limit=1,
-        scan_index_forward=True,
+            Order,
+            key_condition_expression=Key("order_id").eq("o1"),
+            limit=1,
+            scan_index_forward=True,
     ):
         first_page = page
         break
@@ -145,10 +145,10 @@ async def test_query_supports_exclusive_start_key(orders_table):
 
     remaining = []
     async for page in db.query(
-        Order,
-        key_condition_expression=Key("order_id").eq("o1"),
-        exclusive_start_key=first_page.last_evaluated_key,
-        scan_index_forward=True,
+            Order,
+            key_condition_expression=Key("order_id").eq("o1"),
+            exclusive_start_key=first_page.last_evaluated_key,
+            scan_index_forward=True,
     ):
         remaining.extend(page.items)
 
@@ -164,10 +164,10 @@ async def test_query_applies_filter_expression(orders_table):
 
     filtered = []
     async for page in db.query(
-        Order,
-        key_condition_expression=Key("order_id").eq("o1"),
-        filter_expression=Attr("total").gte(200),
-        scan_index_forward=True,
+            Order,
+            key_condition_expression=Key("order_id").eq("o1"),
+            filter_expression=Attr("total").gte(200),
+            scan_index_forward=True,
     ):
         filtered.extend(page.items)
 
@@ -183,11 +183,11 @@ async def test_query_index(orders_table):
 
     filtered = []
     async for page in db.query(
-        Order,
-        index_name="order_gsi",
-        key_condition_expression=Key("order_id").eq("o1"),
-        filter_expression=Attr("total").gte(200),
-        scan_index_forward=True,
+            Order,
+            index_name="order_gsi",
+            key_condition_expression=Key("order_id").eq("o1"),
+            filter_expression=Attr("total").gte(200),
+            scan_index_forward=True,
     ):
         filtered.extend(page.items)
 
@@ -203,12 +203,53 @@ async def test_query_lsi_index(orders_table):
 
     filtered = []
     async for page in db.query(
-        Order,
-        index_name="order_lsi",
-        key_condition_expression=Key("order_id").eq("o1"),
-        filter_expression=Attr("total").gte(200),
-        scan_index_forward=True,
+            Order,
+            index_name="order_lsi",
+            key_condition_expression=Key("order_id").eq("o1"),
+            filter_expression=Attr("total").gte(200),
+            scan_index_forward=True,
     ):
         filtered.extend(page.items)
 
     assert [item.total for item in filtered] == [200, 300]
+
+
+async def test_complex_item(complex_order_table):
+    db = DynamoDB()
+    basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
+    await db.put(ComplexOrder(order_id="o1", created_at="2026-01-01", total=100, basket=basket))
+    await db.put(ComplexOrder(order_id="o1", created_at="2026-01-02", total=200, basket=basket))
+    await db.put(ComplexOrder(order_id="o1", created_at="2026-01-03", total=300, basket=basket))
+
+    filtered = []
+    async for page in db.query(
+            ComplexOrder,
+            index_name="order_lsi",
+            key_condition_expression=Key("order_id").eq("o1"),
+            filter_expression=Attr("total").gte(200),
+            scan_index_forward=True,
+    ):
+        filtered.extend(page.items)
+
+    assert filtered == [
+        ComplexOrder(
+            order_id='o1',
+            created_at='2026-01-02',
+            total=200,
+            basket=Basket(
+                items=[
+                    Item(qty=1, price=10.9, name='foo')
+                ]
+            )
+        ),
+        ComplexOrder(
+            order_id='o1',
+            created_at='2026-01-03',
+            total=300,
+                     basket=Basket(
+                         items=[
+                             Item(qty=1, price=10.9, name='foo')
+                         ]
+                     )
+        )
+    ]

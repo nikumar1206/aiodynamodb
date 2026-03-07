@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from types_aiobotocore_dynamodb.client import DynamoDBClient
     from types_aiobotocore_dynamodb.service_resource import Table
 
+from aiodynamodb._serializers import to_dynamo_compatible
 from aiodynamodb.models import DynamoModel, QueryResult
 
 type KeyT = int | str
@@ -83,7 +84,7 @@ class DynamoDB:
             args["ConditionExpression"] = condition_expression
         async with self._resource() as resource:
             table: Table = await resource.Table(item.Meta.table_name)
-            await table.put_item(Item=item.model_dump(), **args)
+            await table.put_item(Item=to_dynamo_compatible(item.model_dump()), **args)
 
     async def delete[T: DynamoModel](self, item: T, *, condition_expression: ConditionBase = None) -> None:
         """Delete an item from DynamoDB.
@@ -98,7 +99,7 @@ class DynamoDB:
             args["ConditionExpression"] = condition_expression
         async with self._resource() as resource:
             table: Table = await resource.Table(item.Meta.table_name)
-            await table.delete_item(Item=item.model_dump(), **args)
+            await table.delete_item(Item=to_dynamo_compatible(item.model_dump()), **args)
 
     async def get[T: DynamoModel](
         self,

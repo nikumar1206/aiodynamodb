@@ -1,3 +1,5 @@
+from pydantic import BaseModel
+
 from aiodynamodb import DynamoModel, table
 from aiodynamodb.models import GSI, LSI
 
@@ -26,3 +28,21 @@ class Order(DynamoModel):
     order_id: str
     created_at: str
     total: int
+
+
+class Item(BaseModel):
+    qty: int
+    price: float
+    name: str
+
+
+class Basket(BaseModel):
+    items: list[Item]
+
+
+@table("orders", hash_key="order_id", range_key="created_at", indexes=[order_gsi, order_lsi])
+class ComplexOrder(DynamoModel):
+    order_id: str
+    created_at: str
+    total: int
+    basket: Basket
