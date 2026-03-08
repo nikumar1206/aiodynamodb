@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, get_args, get_origin
 
 import aioboto3
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
+from pydantic import TypeAdapter
 from types_aiobotocore_dynamodb import DynamoDBServiceResource
 from types_aiobotocore_dynamodb.literals import BillingModeType, TableClassType
 from types_aiobotocore_dynamodb.type_defs import (
@@ -26,12 +27,22 @@ if TYPE_CHECKING:
     from types_aiobotocore_dynamodb.service_resource import Table
 
 from aiodynamodb._serializers import to_dynamo_compatible
-from aiodynamodb.custom_types import Timestamp
-from aiodynamodb.models import DynamoModel, QueryResult
+from aiodynamodb.custom_types import Timestamp, TimestampMillis, TimestampMicros, TimestampNanos
+from aiodynamodb.models import DynamoModel, QueryResult, TableMeta
 
-type KeyT = int | str
+_KEY_TO_TYPE = {
+    str: "S",
+    bytes: "B",
+    int: "N",
+    datetime: "S",
+    float: "N",
+    Timestamp: "N",
+    TimestampMillis: "N",
+    TimestampMicros: "N",
+    TimestampNanos: "N"
+}
 
-_KEY_TO_TYPE = {str: "S", bytes: "B", int: "N", datetime: "S", float: "N", Timestamp: "N"}
+type KeyT = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime
 
 
 def _resolve_key_annotation(annotation: Any) -> type:
@@ -53,6 +64,12 @@ class Page[T]:
     last_evaluated_key: dict | None = None
 
 
+def _serialize_key_value(model: DynamoModel, key_name: str, key_value: KeyT) -> str | int:
+    key_type = _resolve_key_annotation(model.model_fields[key_name].annotation)
+    serialized = TypeAdapter(key_type).serializer.to_python(key_value)
+    return serialized
+
+
 class DynamoDB:
     """Async DynamoDB client for working with ``DynamoModel`` entities.
 
@@ -60,13 +77,14 @@ class DynamoDB:
     operations and returns validated model instances for reads/queries.
     """
 
-    def __init__(self, session: aioboto3.Session | None = None):
+    def __init__(self, session: aioboto3.Session | None = None, hask_key_types: dict[Any, str] = _KEY_TO_TYPE):
         """Create a client instance.
 
         Args:
             session: Optional ``aioboto3`` session. If omitted, a new session is created.
         """
         self._session = session or aioboto3.Session()
+        self.hask_key_types = hask_key_types
 
     @cached_property
     async def exceptions(self):
@@ -127,9 +145,10 @@ class DynamoDB:
             Parsed model instance when found, otherwise ``None``.
         """
         meta = model.Meta
-        key = {meta.hash_key: hash_key}
+        key = {meta.hash_key: _serialize_key_value(model, meta.hash_key, hash_key)}
         if meta.range_key and range_key is not None:
-            key[meta.range_key] = range_key
+            serialized = _serialize_key_value(model, meta.range_key, range_key)
+            key[meta.range_key] = serialized
 
         args = dict(
             Key=key,
@@ -240,12 +259,12 @@ class DynamoDB:
 
         def _add_attribute(field_name: str) -> None:
             annotation = _resolve_key_annotation(model.model_fields[field_name].annotation)
-            if annotation not in _KEY_TO_TYPE:
+            if annotation not in self.hask_key_types:
                 raise TypeError(
                     f"Unsupported key type for field '{field_name}': {annotation!r}. "
-                    f"Supported types are: {tuple(_KEY_TO_TYPE)}"
+                    f"Supported types are: {tuple(self.hask_key_types)}"
                 )
-            attribute_types[field_name] = _KEY_TO_TYPE[annotation]
+            attribute_types[field_name] = self.hask_key_types[annotation]
 
         _add_attribute(meta.hash_key)
         if meta.range_key:

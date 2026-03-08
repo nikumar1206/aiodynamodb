@@ -4,10 +4,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 from boto3.dynamodb.conditions import Attr, Key
+from pydantic import BaseModel
 from pydantic_core import TzInfo
 from types_aiobotocore_dynamodb import DynamoDBClient
 
-from aiodynamodb import DynamoDB
+from aiodynamodb import DynamoDB, table, DynamoModel
+from aiodynamodb.custom_types import Timestamp, TimestampMillis, JSONStr
 from tests.entities import Basket, ComplexOrder, Item, Order, User
 
 
@@ -324,26 +326,42 @@ async def test_complex_item(complex_order_table):
 
 
 async def test_items_are_stored_in_the_correct_raw_format(complex_order_table):
+    class JsonData(BaseModel):
+        f1: bool
+        f2: str
+
+    @table("complex", hash_key="order_id", range_key="created_at")
+    class Complex(DynamoModel):
+        order_id: str
+        created_at: Timestamp
+        created_at_milli: TimestampMillis
+        json_str: JSONStr[JsonData]
+        total: int
+        basket: Basket
+
     db = DynamoDB()
+    await db.create_table(Complex)
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
     await db.put(
-        ComplexOrder(
+        Complex(
             order_id="o1",
             created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
+            created_at_milli=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
             total=300,
+            json_str=JsonData(f1=False, f2="test"),
             basket=basket
         )
     )
 
     c: DynamoDBClient
     async with db._client() as c:
-        meta = ComplexOrder.Meta
+        meta = Complex.Meta
         key = {
             meta.hash_key: {"S": "o1"},
             meta.range_key: {"N": str(int(datetime(2020, 1, 3, tzinfo=TzInfo(0)).timestamp()))}
         }
 
-        actual = await c.get_item(TableName=meta.table_name, Key=key)\
+        actual = await c.get_item(TableName=meta.table_name, Key=key)
 
     expected_item = {
         'basket': {
@@ -363,6 +381,23 @@ async def test_items_are_stored_in_the_correct_raw_format(complex_order_table):
         },
         'created_at': {'N': '1578009600'},
         'order_id': {'S': 'o1'},
-        'total': {'N': '300'}
+        'total': {'N': '300'},
+        'created_at_milli': {'N': '1578009600000'},
+        'json_str': {'S': '{"f1":false,"f2":"test"}'},
     }
     assert actual["Item"] == expected_item
+
+    actual_item = await db.get(
+        Complex,
+        hash_key="o1",
+        range_key=datetime(2020, 1, 3, tzinfo=TzInfo(0))
+    )
+
+    assert actual_item == Complex(
+        order_id='o1',
+        created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
+        created_at_milli=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
+        json_str=JsonData(f1=False, f2='test'),
+        total=300,
+        basket=Basket(items=[Item(qty=1, price=10.9, name='foo')])
+    )
