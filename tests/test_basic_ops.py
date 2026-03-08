@@ -346,7 +346,7 @@ async def test_items_are_stored_in_the_correct_raw_format(complex_order_table):
         Complex(
             order_id="o1",
             created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
-            created_at_milli=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
+            created_at_milli=datetime(2020, 1, 3, microsecond=1000, tzinfo=TzInfo(0)),
             total=300,
             json_str=JsonData(f1=False, f2="test"),
             basket=basket
@@ -382,7 +382,7 @@ async def test_items_are_stored_in_the_correct_raw_format(complex_order_table):
         'created_at': {'N': '1578009600'},
         'order_id': {'S': 'o1'},
         'total': {'N': '300'},
-        'created_at_milli': {'N': '1578009600000'},
+        'created_at_milli': {'N': '1578009600001'},
         'json_str': {'S': '{"f1":false,"f2":"test"}'},
     }
     assert actual["Item"] == expected_item
@@ -396,7 +396,7 @@ async def test_items_are_stored_in_the_correct_raw_format(complex_order_table):
     assert actual_item == Complex(
         order_id='o1',
         created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
-        created_at_milli=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
+        created_at_milli=datetime(2020, 1, 3, microsecond=1000, tzinfo=TzInfo(0)),
         json_str=JsonData(f1=False, f2='test'),
         total=300,
         basket=Basket(items=[Item(qty=1, price=10.9, name='foo')])
