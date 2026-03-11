@@ -1,6 +1,10 @@
+from datetime import UTC, datetime
 from decimal import Decimal
 
-from aiodynamodb._serializers import DESERIALIZER, SERIALIZER
+from pydantic import BaseModel
+
+from aiodynamodb._serializers import DESERIALIZER, SERIALIZER, _serialize_custom_attribute
+from aiodynamodb.custom_types import Timestamp
 
 
 def test_serializer_casts_float_to_decimal():
@@ -15,3 +19,30 @@ def test_serializer_casts_nested_floats_to_decimal():
     assert serialized["M"]["amount"] == {"N": "1.5"}
     assert serialized["M"]["items"]["L"][0] == {"N": "2.25"}
     assert serialized["M"]["items"]["L"][1]["M"]["tax"] == {"N": "0.1"}
+
+
+def test_serialize_custom_attribute_supports_nested_model_paths():
+    class BazModel(BaseModel):
+        baz: Timestamp
+
+    class BarModel(BaseModel):
+        bar: BazModel
+
+    class FooModel(BaseModel):
+        foo: BarModel
+
+    value = datetime(2020, 1, 1, tzinfo=UTC)
+    serialized = _serialize_custom_attribute(FooModel, "foo.bar.baz", value)
+    assert serialized == int(value.timestamp())
+
+
+def test_serialize_custom_attribute_supports_indexed_nested_paths():
+    class ItemModel(BaseModel):
+        baz: Timestamp
+
+    class FooModel(BaseModel):
+        foo: list[ItemModel]
+
+    value = datetime(2020, 1, 1, tzinfo=UTC)
+    serialized = _serialize_custom_attribute(FooModel, "foo[0].baz", value)
+    assert serialized == int(value.timestamp())

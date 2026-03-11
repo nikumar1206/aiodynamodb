@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, get_args, get_origin
 
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
-from pydantic import TypeAdapter, BaseModel
-from aiodynamodb.custom_types import KeyT
+from pydantic import BaseModel, TypeAdapter
 
 from aiodynamodb._util import _resolve_key_annotation
+from aiodynamodb.custom_types import KeyT
 
 
 def _serilize_dynamo_primitives(value: Any) -> Any:
@@ -61,9 +61,57 @@ def _serialize_custom_attribute(model: BaseModel, field_name: str, field_value: 
 
     This is auto applied on hash and range key on get() but must be manually applied in query
     """
-    key_type = _resolve_key_annotation(model.model_fields[field_name].annotation)
+    current_model: type[BaseModel] = model
+    key_type: Any = None
+    fields = [part for part in field_name.split(".") if part]
+
+    for index, raw_field in enumerate(fields):
+        field = raw_field.split("[", 1)[0]
+        if field not in current_model.model_fields:
+            raise KeyError(f"Unknown field '{field}' in path '{field_name}' for model {current_model.__name__}")
+        key_type = _resolve_key_annotation(current_model.model_fields[field].annotation)
+        if index == len(fields) - 1:
+            break
+        nested_model = _extract_nested_model(key_type)
+        if nested_model is None:
+            raise TypeError(f"Field path '{field_name}' is not a nested model path")
+        current_model = nested_model
+
+    if key_type is None:
+        raise ValueError(f"Invalid field path '{field_name}'")
     serialized = TypeAdapter(key_type).serializer.to_python(field_value)
     return serialized
+
+
+def _extract_nested_model(annotation: Any) -> type[BaseModel] | None:
+    """Return nested BaseModel type from an annotation when present."""
+    resolved = _resolve_key_annotation(annotation)
+    origin = get_origin(resolved)
+
+    if origin is None:
+        if isinstance(resolved, type) and issubclass(resolved, BaseModel):
+            return resolved
+        return None
+
+    if origin is list or origin is set or origin is tuple:
+        args = [arg for arg in get_args(resolved) if arg is not Ellipsis]
+        if args:
+            return _extract_nested_model(args[0])
+        return None
+
+    if origin is dict:
+        args = get_args(resolved)
+        if len(args) == 2:
+            return _extract_nested_model(args[1])
+        return None
+
+    if str(origin) == "typing.Annotated":
+        args = get_args(resolved)
+        if args:
+            return _extract_nested_model(args[0])
+        return None
+
+    return None
 
 
 SERIALIZER = DynamoSerializer()

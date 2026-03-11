@@ -368,6 +368,50 @@ async def test_query_serializes_custom_key_condition_values(complex_order_table)
     assert [item.total for item in filtered] == [200, 300]
 
 
+async def test_deep_filter(complex_order_table):
+    db = DynamoDB()
+    basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
+    basket2 = Basket(items=[Item(qty=2, price=10.9, name="foo")])
+
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            total=100,
+            basket=basket,
+        )
+    )
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 2, tzinfo=TzInfo(0)),
+            total=200,
+            basket=basket,
+        )
+    )
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
+            total=300,
+            basket=basket2,
+        )
+    )
+
+    filtered = []
+    async for page in db.query(
+            ComplexOrder,
+            key_condition_expression=(
+                    Key("order_id").eq("o1")
+            ),
+            filter_expression=Attr("basket.items.qty").gt(1),
+            scan_index_forward=True,
+    ):
+        filtered.extend(page.items)
+
+    assert [item.total for item in filtered] == [300]
+
+
 async def test_items_are_stored_in_the_correct_raw_format(complex_order_table):
     class JsonData(BaseModel):
         f1: bool
