@@ -24,8 +24,8 @@ Example:
 
 from importlib.metadata import PackageNotFoundError, version
 
-from aiodynamodb.client import DynamoDB, Key, Page
 from aiodynamodb import custom_types
+from aiodynamodb.client import DynamoDB, Page
 from aiodynamodb.models import (
     DynamoModel,
     TableMeta,
@@ -42,7 +42,6 @@ VERSION = __version__
 __all__ = [
     "DynamoDB",
     "DynamoModel",
-    "Key",
     "TableMeta",
     "Page",
     "table",

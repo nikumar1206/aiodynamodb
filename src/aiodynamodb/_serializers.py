@@ -4,6 +4,10 @@ from decimal import Decimal
 from typing import Any
 
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
+from pydantic import TypeAdapter, BaseModel
+from aiodynamodb.custom_types import KeyT
+
+from aiodynamodb._util import _resolve_key_annotation
 
 
 def _serilize_dynamo_primitives(value: Any) -> Any:
@@ -50,6 +54,16 @@ class DynamoDeserializer:
 
     def deserialize(self, value: dict[str, Any]) -> Any:
         return self._to_dynamo(value)
+
+
+def _serialize_custom_attribute(model: BaseModel, field_name: str, field_value: KeyT) -> str | int:
+    """Function to correctly serialize custom types to the expected dynamo value.
+
+    This is auto applied on hash and range key on get() but must be manually applied in query
+    """
+    key_type = _resolve_key_annotation(model.model_fields[field_name].annotation)
+    serialized = TypeAdapter(key_type).serializer.to_python(field_value)
+    return serialized
 
 
 SERIALIZER = DynamoSerializer()

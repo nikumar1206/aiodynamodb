@@ -5,11 +5,9 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, get_args, get_origin
+from typing import TYPE_CHECKING, Any
 
 import aioboto3
-from boto3.dynamodb.conditions import Attr, ConditionBase, Key
-from pydantic import TypeAdapter
 from types_aiobotocore_dynamodb import DynamoDBServiceResource
 from types_aiobotocore_dynamodb.literals import BillingModeType, TableClassType
 from types_aiobotocore_dynamodb.type_defs import (
@@ -22,13 +20,18 @@ from types_aiobotocore_dynamodb.type_defs import (
     TableAttributeValueTypeDef,
 )
 
+from aiodynamodb._util import _resolve_key_annotation
+
 if TYPE_CHECKING:
     from types_aiobotocore_dynamodb.client import DynamoDBClient
     from types_aiobotocore_dynamodb.service_resource import Table
 
-from aiodynamodb._serializers import to_dynamo_compatible
-from aiodynamodb.custom_types import Timestamp, TimestampMillis, TimestampMicros, TimestampNanos
-from aiodynamodb.models import DynamoModel, QueryResult, TableMeta
+from boto3.dynamodb.conditions import Attr, ConditionBase, Key
+
+from aiodynamodb._serializers import _serialize_custom_attribute, to_dynamo_compatible
+from aiodynamodb.conditions import CustomConditionExpressionBuilder
+from aiodynamodb.custom_types import KeyT, Timestamp, TimestampMicros, TimestampMillis, TimestampNanos
+from aiodynamodb.models import DynamoModel, QueryResult
 
 _KEY_TO_TYPE = {
     str: "S",
@@ -42,19 +45,6 @@ _KEY_TO_TYPE = {
     TimestampNanos: "N"
 }
 
-type KeyT = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime
-
-
-def _resolve_key_annotation(annotation: Any) -> type:
-    """Resolve optional/union annotations to a concrete key type."""
-    origin = get_origin(annotation)
-    if origin is None:
-        return annotation
-    args = [arg for arg in get_args(annotation) if arg is not type(None)]
-    if len(args) == 1:
-        return _resolve_key_annotation(args[0])
-    return annotation
-
 
 @dataclass
 class Page[T]:
@@ -64,10 +54,24 @@ class Page[T]:
     last_evaluated_key: dict | None = None
 
 
-def _serialize_key_value(model: DynamoModel, key_name: str, key_value: KeyT) -> str | int:
-    key_type = _resolve_key_annotation(model.model_fields[key_name].annotation)
-    serialized = TypeAdapter(key_type).serializer.to_python(key_value)
-    return serialized
+def _build_condition_expression(
+        model: type[DynamoModel],
+        expression: ConditionBase | None,
+        *,
+        is_key_condition: bool = False,
+        builder: CustomConditionExpressionBuilder | None = None,
+) -> tuple[str | ConditionBase, dict[str, str], dict[str, Any]] | None:
+    if expression is None:
+        return None
+    if not isinstance(expression, ConditionBase):
+        return expression, {}, {}
+    builder = builder or CustomConditionExpressionBuilder(model)
+    built = builder.build_expression(expression, is_key_condition=is_key_condition)
+    return (
+        built.condition_expression,
+        built.attribute_name_placeholders,
+        built.attribute_value_placeholders,
+    )
 
 
 class DynamoDB:
@@ -103,7 +107,14 @@ class DynamoDB:
         """
         args = {}
         if condition_expression:
-            args["ConditionExpression"] = condition_expression
+            built = _build_condition_expression(type(item), condition_expression)
+            if built is not None:
+                condition, names, values = built
+                args["ConditionExpression"] = condition
+                if names:
+                    args["ExpressionAttributeNames"] = names
+                if values:
+                    args["ExpressionAttributeValues"] = values
         async with self._resource() as resource:
             table: Table = await resource.Table(item.Meta.table_name)
             await table.put_item(Item=to_dynamo_compatible(item.model_dump()), **args)
@@ -118,7 +129,14 @@ class DynamoDB:
         """
         args = {}
         if condition_expression:
-            args["ConditionExpression"] = condition_expression
+            built = _build_condition_expression(type(item), condition_expression)
+            if built is not None:
+                condition, names, values = built
+                args["ConditionExpression"] = condition
+                if names:
+                    args["ExpressionAttributeNames"] = names
+                if values:
+                    args["ExpressionAttributeValues"] = values
         async with self._resource() as resource:
             table: Table = await resource.Table(item.Meta.table_name)
             await table.delete_item(Item=to_dynamo_compatible(item.model_dump()), **args)
@@ -145,9 +163,9 @@ class DynamoDB:
             Parsed model instance when found, otherwise ``None``.
         """
         meta = model.Meta
-        key = {meta.hash_key: _serialize_key_value(model, meta.hash_key, hash_key)}
+        key = {meta.hash_key: _serialize_custom_attribute(model, meta.hash_key, hash_key)}
         if meta.range_key and range_key is not None:
-            serialized = _serialize_key_value(model, meta.range_key, range_key)
+            serialized = _serialize_custom_attribute(model, meta.range_key, range_key)
             key[meta.range_key] = serialized
 
         args = dict(
@@ -206,10 +224,38 @@ class DynamoDB:
             query_args["IndexName"] = index_name
         if limit is not None:
             query_args["Limit"] = limit
+        condition_builder = CustomConditionExpressionBuilder(model)
         if key_condition_expression is not None:
-            query_args["KeyConditionExpression"] = key_condition_expression
+            built = _build_condition_expression(
+                model,
+                key_condition_expression,
+                is_key_condition=True,
+                builder=condition_builder,
+            )
+            if built is not None:
+                condition, names, values = built
+                query_args["KeyConditionExpression"] = condition
+                if names:
+                    query_args["ExpressionAttributeNames"] = names
+                if values:
+                    query_args["ExpressionAttributeValues"] = values
         if filter_expression is not None:
-            query_args["FilterExpression"] = filter_expression
+            built = _build_condition_expression(
+                model,
+                filter_expression,
+                builder=condition_builder,
+            )
+            if built is not None:
+                condition, names, values = built
+                query_args["FilterExpression"] = condition
+                if names:
+                    existing_names = query_args.get("ExpressionAttributeNames", {})
+                    existing_names.update(names)
+                    query_args["ExpressionAttributeNames"] = existing_names
+                if values:
+                    existing_values = query_args.get("ExpressionAttributeValues", {})
+                    existing_values.update(values)
+                    query_args["ExpressionAttributeValues"] = existing_values
         if exclusive_start_key is not None:
             query_args["ExclusiveStartKey"] = exclusive_start_key
         if return_consumed_capacity:

@@ -8,8 +8,8 @@ from pydantic import BaseModel
 from pydantic_core import TzInfo
 from types_aiobotocore_dynamodb import DynamoDBClient
 
-from aiodynamodb import DynamoDB, table, DynamoModel
-from aiodynamodb.custom_types import Timestamp, TimestampMillis, JSONStr
+from aiodynamodb import DynamoDB, DynamoModel, table
+from aiodynamodb.custom_types import JSONStr, Timestamp, TimestampMillis
 from tests.entities import Basket, ComplexOrder, Item, Order, User
 
 
@@ -323,6 +323,49 @@ async def test_complex_item(complex_order_table):
             )
         )
     ]
+
+
+async def test_query_serializes_custom_key_condition_values(complex_order_table):
+    db = DynamoDB()
+    basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
+
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            total=100,
+            basket=basket,
+        )
+    )
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 2, tzinfo=TzInfo(0)),
+            total=200,
+            basket=basket,
+        )
+    )
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
+            total=300,
+            basket=basket,
+        )
+    )
+
+    filtered = []
+    async for page in db.query(
+            ComplexOrder,
+            key_condition_expression=(
+                    Key("order_id").eq("o1")
+                    & Key("created_at").gte(datetime(2020, 1, 2, tzinfo=TzInfo(0)))
+            ),
+            scan_index_forward=True,
+    ):
+        filtered.extend(page.items)
+
+    assert [item.total for item in filtered] == [200, 300]
 
 
 async def test_items_are_stored_in_the_correct_raw_format(complex_order_table):
