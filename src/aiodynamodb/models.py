@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Self
 
+from boto3.dynamodb.conditions import ConditionBase
 from pydantic import BaseModel
 from types_aiobotocore_dynamodb.literals import ProjectionTypeType
 from types_aiobotocore_dynamodb.type_defs import (
@@ -14,6 +15,7 @@ from types_aiobotocore_dynamodb.type_defs import (
 )
 
 from aiodynamodb._serializers import DESERIALIZER, SERIALIZER
+from aiodynamodb.custom_types import KeyT
 
 
 @dataclass
@@ -162,3 +164,55 @@ class QueryResult[T: DynamoModel]:
 
     items: list[T]
     last_evaluated_key: dict[str, Any] | None
+
+
+@dataclass
+class Page[T]:
+    """Represents one page of results from a paginated DynamoDB operation."""
+
+    items: list[T]
+    last_evaluated_key: dict | None = None
+
+
+@dataclass(frozen=True)
+class TransactGet[T: DynamoModel]:
+    """Single item read request used by ``transact_get``."""
+
+    model: type[T]
+    hash_key: KeyT
+    range_key: KeyT | None = None
+    consistent_read: bool = False
+    projection_expression: str | None = None
+    expression_attribute_names: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class TransactPut[T: DynamoModel]:
+    """Put operation used by ``transact_write``."""
+
+    item: T
+    condition_expression: ConditionBase | None = None
+
+    @property
+    def model(self) -> T:
+        return type(self.item)
+
+
+@dataclass(frozen=True)
+class TransactDelete[T: DynamoModel]:
+    """Delete operation used by ``transact_write``."""
+
+    model: type[T]
+    hash_key: KeyT
+    range_key: KeyT | None = None
+    condition_expression: ConditionBase | None = None
+
+
+@dataclass(frozen=True)
+class TransactConditionCheck[T: DynamoModel]:
+    """Condition-check operation used by ``transact_write``."""
+
+    model: type[T]
+    hash_key: KeyT
+    condition_expression: ConditionBase
+    range_key: KeyT | None = None

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, TypedDict, assert_never
+from typing import TYPE_CHECKING, Any, assert_never
 
 import aioboto3
 from types_aiobotocore_dynamodb import DynamoDBServiceResource
@@ -18,10 +17,14 @@ from types_aiobotocore_dynamodb.type_defs import (
     DeleteTableOutputTypeDef,
     ProvisionedThroughputTypeDef,
     TableAttributeValueTypeDef,
-    UniversalAttributeValueTypeDef,
 )
 
-from aiodynamodb._util import _resolve_key_annotation
+from aiodynamodb._util import (
+    _add_filter_expressions,
+    _condition_expressions,
+    _key_condition_expressions,
+)
+from aiodynamodb.models import TransactConditionCheck, TransactDelete, TransactGet, TransactPut
 
 if TYPE_CHECKING:
     from types_aiobotocore_dynamodb.client import DynamoDBClient
@@ -29,7 +32,7 @@ if TYPE_CHECKING:
 
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 
-from aiodynamodb._serializers import _serialize_custom_attribute, to_dynamo_compatible
+from aiodynamodb._serializers import _resolve_key_annotation, _serialize_custom_attribute, to_dynamo_compatible
 from aiodynamodb.conditions import CustomConditionExpressionBuilder
 from aiodynamodb.custom_types import KeyT, Timestamp, TimestampMicros, TimestampMillis, TimestampNanos
 from aiodynamodb.models import DynamoModel, QueryResult
@@ -46,175 +49,9 @@ _KEY_TO_TYPE = {
     TimestampNanos: "N"
 }
 
-
-@dataclass
-class Page[T]:
-    """Represents one page of results from a paginated DynamoDB operation."""
-
-    items: list[T]
-    last_evaluated_key: dict | None = None
-
-
-@dataclass(frozen=True)
-class TransactGet[T: DynamoModel]:
-    """Single item read request used by ``transact_get``."""
-
-    model: type[T]
-    hash_key: KeyT
-    range_key: KeyT | None = None
-    consistent_read: bool = False
-    projection_expression: str | None = None
-    expression_attribute_names: dict[str, str] | None = None
-
-
-@dataclass(frozen=True)
-class TransactPut[T: DynamoModel]:
-    """Put operation used by ``transact_write``."""
-
-    item: T
-    condition_expression: ConditionBase | None = None
-
-    @property
-    def model(self) -> T:
-        return type(self.item)
-
-
-@dataclass(frozen=True)
-class TransactDelete[T: DynamoModel]:
-    """Delete operation used by ``transact_write``."""
-
-    model: type[T]
-    hash_key: KeyT
-    range_key: KeyT | None = None
-    condition_expression: ConditionBase | None = None
-
-
-@dataclass(frozen=True)
-class TransactConditionCheck[T: DynamoModel]:
-    """Condition-check operation used by ``transact_write``."""
-
-    model: type[T]
-    hash_key: KeyT
-    condition_expression: ConditionBase
-    range_key: KeyT | None = None
-
-
 type TransactWriteOperation = (
         TransactPut[DynamoModel] | TransactDelete[DynamoModel] | TransactConditionCheck[DynamoModel]
 )
-
-type ConditionExpressionT = str | None
-type ExpressionAttributeNamesT = dict[str, str] | None
-type ExpressionAttributeValuesT = dict[str, UniversalAttributeValueTypeDef] | None
-
-
-class ConditionExpression(TypedDict):
-    ConditionExpression: ConditionExpressionT
-    ExpressionAttributeNamesT: ExpressionAttributeNamesT
-    ExpressionAttributeValuesT: ExpressionAttributeValuesT
-
-
-class KeyConditionExpression(TypedDict):
-    KeyConditionExpression: ConditionExpressionT
-    ExpressionAttributeNamesT: ExpressionAttributeNamesT
-    ExpressionAttributeValuesT: ExpressionAttributeValuesT
-
-
-class FilterExpression(TypedDict):
-    FilterExpression: ConditionExpressionT
-    ExpressionAttributeNamesT: ExpressionAttributeNamesT
-    ExpressionAttributeValuesT: ExpressionAttributeValuesT
-
-
-def _build_condition_expression(
-        model: type[DynamoModel],
-        expression: ConditionBase | None,
-        *,
-        is_key_condition: bool = False,
-        builder: CustomConditionExpressionBuilder | None = None,
-        # needed as this is a statefiul object with autoincrementing values!
-) -> tuple[ConditionExpression, ExpressionAttributeNamesT, ExpressionAttributeValuesT]:
-    if expression is None:
-        return None, None, None
-    if not isinstance(expression, ConditionBase):
-        return expression, {}, {}
-    builder = builder or CustomConditionExpressionBuilder(model)
-    built = builder.build_expression(expression, is_key_condition=is_key_condition)
-    return (
-        built.condition_expression,
-        built.attribute_name_placeholders,
-        built.attribute_value_placeholders,
-    )
-
-
-def _condition_expressions(
-        model: type[DynamoModel],
-        expression: ConditionBase | None,
-        *,
-        builder: CustomConditionExpressionBuilder | None = None
-) -> ConditionExpression:
-    dynamo_expression = {}
-    condition, names, values = _build_condition_expression(
-        model,
-        expression,
-        is_key_condition=False,
-        builder=builder
-    )
-    if condition is not None:
-        dynamo_expression["ConditionExpression"] = condition
-        if names:
-            dynamo_expression["ExpressionAttributeNames"] = names
-        if values:
-            dynamo_expression["ExpressionAttributeValues"] = values
-    return dynamo_expression
-
-
-def _key_condition_expressions(
-        model: type[DynamoModel],
-        expression: ConditionBase | None,
-        *,
-        builder: CustomConditionExpressionBuilder | None = None
-) -> KeyConditionExpression:
-    dynamo_expression = {}
-    condition, names, values = _build_condition_expression(
-        model,
-        expression,
-        is_key_condition=True,
-        builder=builder
-    )
-    if condition is not None:
-        dynamo_expression["KeyConditionExpression"] = condition
-        if names:
-            dynamo_expression["ExpressionAttributeNames"] = names
-        if values:
-            dynamo_expression["ExpressionAttributeValues"] = values
-    return dynamo_expression
-
-
-def _add_filter_expressions(
-        model: type[DynamoModel],
-        expression: ConditionBase | None,
-        *,
-        query_args: dict[str, Any],
-        builder: CustomConditionExpressionBuilder | None = None,
-) -> FilterExpression:
-    condition, names, values = _build_condition_expression(
-        model,
-        expression,
-        is_key_condition=False,
-        builder=builder
-    )
-    if condition is not None:
-        query_args["FilterExpression"] = condition
-        if names:
-            existing_names = query_args.get("ExpressionAttributeNames", {})
-            existing_names.update(names)
-            query_args["ExpressionAttributeNames"] = existing_names
-        if values:
-            existing_values = query_args.get("ExpressionAttributeValues", {})
-            existing_values.update(values)
-            query_args["ExpressionAttributeValues"] = existing_values
-    return query_args
 
 
 class DynamoDB:

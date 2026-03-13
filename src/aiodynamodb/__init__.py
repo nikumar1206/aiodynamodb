@@ -27,15 +27,15 @@ from importlib.metadata import PackageNotFoundError, version
 from aiodynamodb import custom_types
 from aiodynamodb.client import (
     DynamoDB,
+)
+from aiodynamodb.models import (
+    DynamoModel,
     Page,
+    TableMeta,
     TransactConditionCheck,
     TransactDelete,
     TransactGet,
     TransactPut,
-)
-from aiodynamodb.models import (
-    DynamoModel,
-    TableMeta,
     table,
 )
 
