@@ -17,7 +17,8 @@ from types_aiobotocore_dynamodb.type_defs import (
     CreateTableOutputTypeDef,
     DeleteTableOutputTypeDef,
     ProvisionedThroughputTypeDef,
-    TableAttributeValueTypeDef, UniversalAttributeValueTypeDef,
+    TableAttributeValueTypeDef,
+    UniversalAttributeValueTypeDef,
 )
 
 from aiodynamodb._util import _resolve_key_annotation
@@ -102,27 +103,27 @@ type TransactWriteOperation = (
         TransactPut[DynamoModel] | TransactDelete[DynamoModel] | TransactConditionCheck[DynamoModel]
 )
 
-type ConditionExpression = str | None
-type ExpressionAttributeNames = dict[str, str] | None
-type ExpressionAttributeValues = dict[str, UniversalAttributeValueTypeDef] | None
+type ConditionExpressionT = str | None
+type ExpressionAttributeNamesT = dict[str, str] | None
+type ExpressionAttributeValuesT = dict[str, UniversalAttributeValueTypeDef] | None
 
 
 class ConditionExpression(TypedDict):
-    ConditionExpression: ConditionExpression
-    ExpressionAttributeNames: ExpressionAttributeNames
-    ExpressionAttributeValues: ExpressionAttributeValues
+    ConditionExpression: ConditionExpressionT
+    ExpressionAttributeNamesT: ExpressionAttributeNamesT
+    ExpressionAttributeValuesT: ExpressionAttributeValuesT
 
 
 class KeyConditionExpression(TypedDict):
-    KeyConditionExpression: ConditionExpression
-    ExpressionAttributeNames: ExpressionAttributeNames
-    ExpressionAttributeValues: ExpressionAttributeValues
+    KeyConditionExpression: ConditionExpressionT
+    ExpressionAttributeNamesT: ExpressionAttributeNamesT
+    ExpressionAttributeValuesT: ExpressionAttributeValuesT
 
 
 class FilterExpression(TypedDict):
-    FilterExpression: ConditionExpression
-    ExpressionAttributeNames: ExpressionAttributeNames
-    ExpressionAttributeValues: ExpressionAttributeValues
+    FilterExpression: ConditionExpressionT
+    ExpressionAttributeNamesT: ExpressionAttributeNamesT
+    ExpressionAttributeValuesT: ExpressionAttributeValuesT
 
 
 def _build_condition_expression(
@@ -132,7 +133,7 @@ def _build_condition_expression(
         is_key_condition: bool = False,
         builder: CustomConditionExpressionBuilder | None = None,
         # needed as this is a statefiul object with autoincrementing values!
-) -> tuple[ConditionExpression, ExpressionAttributeNames, ExpressionAttributeValues]:
+) -> tuple[ConditionExpression, ExpressionAttributeNamesT, ExpressionAttributeValuesT]:
     if expression is None:
         return None, None, None
     if not isinstance(expression, ConditionBase):
