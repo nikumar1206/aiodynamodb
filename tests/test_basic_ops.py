@@ -8,7 +8,15 @@ from pydantic import BaseModel
 from pydantic_core import TzInfo
 from types_aiobotocore_dynamodb import DynamoDBClient
 
-from aiodynamodb import DynamoDB, DynamoModel, table
+from aiodynamodb import (
+    DynamoDB,
+    DynamoModel,
+    TransactConditionCheck,
+    TransactDelete,
+    TransactGet,
+    TransactPut,
+    table,
+)
 from aiodynamodb.custom_types import JSONStr, Timestamp, TimestampMillis
 from tests.entities import Basket, ComplexOrder, Item, Order, User
 
@@ -52,6 +60,94 @@ async def test_create_global_table_with_no_regions_sends_empty_replication_group
         GlobalTableName=Order.Meta.table_name,
         ReplicationGroup=[],
     )
+
+
+async def test_transact_write_builds_expected_requests():
+    db = DynamoDB()
+    mock_client = AsyncMock()
+    mock_client.transact_write_items.return_value = {"ConsumedCapacity": []}
+
+    @asynccontextmanager
+    async def fake_client():
+        yield mock_client
+
+    db._client = fake_client  # type: ignore[method-assign]
+
+    await db.transact_write(
+        [
+            TransactPut(User(user_id="u1", name="Alice")),
+            TransactDelete(User, hash_key="u2"),
+            TransactConditionCheck(User, hash_key="u1", condition_expression=Attr("user_id").exists()),
+        ],
+        client_request_token="req-token",
+        return_consumed_capacity=True,
+        return_item_collection_metrics=True,
+    )
+
+    kwargs = mock_client.transact_write_items.await_args.kwargs
+    assert kwargs["ClientRequestToken"] == "req-token"
+    assert kwargs["ReturnConsumedCapacity"] == "TOTAL"
+    assert kwargs["ReturnItemCollectionMetrics"] == "SIZE"
+    assert len(kwargs["TransactItems"]) == 3
+
+    put_item = kwargs["TransactItems"][0]["Put"]
+    assert put_item["TableName"] == User.Meta.table_name
+    assert put_item["Item"] == {"user_id": "u1", "name": "Alice", "email": None}
+
+    delete_item = kwargs["TransactItems"][1]["Delete"]
+    assert delete_item["TableName"] == User.Meta.table_name
+    assert delete_item["Key"] == {"user_id": "u2"}
+
+    condition_item = kwargs["TransactItems"][2]["ConditionCheck"]
+    assert condition_item["TableName"] == User.Meta.table_name
+    assert condition_item["Key"] == {"user_id": "u1"}
+    assert "ConditionExpression" in condition_item
+    assert condition_item["ExpressionAttributeNames"]
+    assert "ExpressionAttributeValues" not in condition_item
+
+
+async def test_transact_write_condition_check_requires_expression():
+    db = DynamoDB()
+    with pytest.raises(TypeError):
+        await db.transact_write([TransactConditionCheck(User, hash_key="u1")])
+
+
+async def test_transact_get_parses_models_and_serializes_custom_keys():
+    db = DynamoDB()
+    mock_client = AsyncMock()
+    mock_client.transact_get_items.return_value = {
+        "Responses": [
+            {"Item": {"user_id": "u1", "name": "Alice", "email": "alice@example.com"}},
+            {},
+        ]
+    }
+
+    @asynccontextmanager
+    async def fake_client():
+        yield mock_client
+
+    db._client = fake_client  # type: ignore[method-assign]
+
+    results = await db.transact_get(
+        [
+            TransactGet(User, hash_key="u1"),
+            TransactGet(
+                ComplexOrder,
+                hash_key="o1",
+                range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+                consistent_read=True,
+            ),
+        ],
+        return_consumed_capacity=True,
+    )
+
+    assert results == [User(user_id="u1", name="Alice", email="alice@example.com"), None]
+
+    kwargs = mock_client.transact_get_items.await_args.kwargs
+    assert kwargs["ReturnConsumedCapacity"] == "TOTAL"
+    assert kwargs["TransactItems"][0]["Get"]["Key"] == {"user_id": "u1"}
+    assert kwargs["TransactItems"][1]["Get"]["Key"] == {"order_id": "o1", "created_at": 1577836800}
+    assert kwargs["TransactItems"][1]["Get"]["ConsistentRead"] is True
 
 
 async def test_put_and_get(users_table):

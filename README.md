@@ -9,6 +9,7 @@ Async DynamoDB client + lightweight model layer built on `aioboto3` and Pydantic
 - Table mapping via `@table(...)` decorator.
 - Query pagination with typed results.
 - Optional conditional writes/deletes.
+- Transactional reads/writes (`transact_get` / `transact_write`).
 - Helpers to create/delete tables from model metadata.
 
 ## Requirements
@@ -254,6 +255,39 @@ await db.delete_table(User)
 
 Global and local secondary indexes are taken from model metadata
 (`@table(..., indexes=[...])`).
+
+### `transact_write`
+
+Atomically execute up to 100 write operations across one or more tables:
+
+```python
+from boto3.dynamodb.conditions import Attr
+from aiodynamodb import TransactConditionCheck, TransactDelete, TransactPut
+
+await db.transact_write(
+    [
+        TransactPut(User(user_id="u1", name="Alice")),
+        TransactConditionCheck(User, hash_key="u1", condition_expression=Attr("user_id").exists()),
+        TransactDelete(User, hash_key="u2"),
+    ],
+    client_request_token="req-123",
+)
+```
+
+### `transact_get`
+
+Atomically read up to 100 items and get typed results back in request order:
+
+```python
+from aiodynamodb import TransactGet
+
+items = await db.transact_get(
+    [
+        TransactGet(User, hash_key="u1"),
+        TransactGet(User, hash_key="u2"),
+    ]
+)
+```
 
 ### `exceptions`
 
