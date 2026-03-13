@@ -1,4 +1,4 @@
-from typing import get_origin, Any, get_args
+from typing import Any, get_args, get_origin
 
 
 def _resolve_key_annotation(annotation: Any) -> type:

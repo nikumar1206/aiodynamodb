@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import PlainSerializer, BaseModel, BeforeValidator
+from pydantic import BaseModel, BeforeValidator, PlainSerializer
 
 type Timestamp = Annotated[datetime, PlainSerializer(lambda d: int(d.timestamp()))]
 type TimestampMillis = Annotated[datetime, PlainSerializer(lambda d: int(d.timestamp() * 1_000))]
