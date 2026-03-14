@@ -14,23 +14,43 @@ type ConditionExpressionT = str | None
 type ExpressionAttributeNamesT = dict[str, str] | None
 type ExpressionAttributeValuesT = dict[str, UniversalAttributeValueTypeDef] | None
 
+"""Internal helpers for building DynamoDB expression payloads.
+
+These functions convert high-level condition and projection inputs into the
+request fragments expected by boto/aioboto3. They are shared across read and
+write APIs so placeholder handling stays consistent.
+"""
+
 
 class ConditionExpression(TypedDict):
+    """Payload fragment for DynamoDB ``ConditionExpression`` requests."""
+
     ConditionExpression: ConditionExpressionT
     ExpressionAttributeNamesT: ExpressionAttributeNamesT
     ExpressionAttributeValuesT: ExpressionAttributeValuesT
 
 
 class KeyConditionExpression(TypedDict):
+    """Payload fragment for DynamoDB ``KeyConditionExpression`` requests."""
+
     KeyConditionExpression: ConditionExpressionT
     ExpressionAttributeNamesT: ExpressionAttributeNamesT
     ExpressionAttributeValuesT: ExpressionAttributeValuesT
 
 
 class FilterExpression(TypedDict):
+    """Payload fragment for DynamoDB ``FilterExpression`` requests."""
+
     FilterExpression: ConditionExpressionT
     ExpressionAttributeNamesT: ExpressionAttributeNamesT
     ExpressionAttributeValuesT: ExpressionAttributeValuesT
+
+
+class ProjectionExpression(TypedDict):
+    """Payload fragment for DynamoDB ``ProjectionExpression`` requests."""
+
+    ProjectionExpression: ConditionExpressionT
+    ExpressionAttributeNamesT: ExpressionAttributeNamesT
 
 
 def _build_condition_expression(
@@ -41,6 +61,12 @@ def _build_condition_expression(
     custom_builder: CustomConditionExpressionBuilder | None = None,
     # needed as this is a statefiul object with autoincrementing values!
 ) -> tuple[ConditionExpression, ExpressionAttributeNamesT, ExpressionAttributeValuesT]:
+    """Build the raw expression string plus placeholder maps.
+
+    When ``expression`` is already a plain string, it is passed through and no
+    placeholders are generated. Otherwise the custom builder expands attribute
+    paths and serializes values based on the model schema.
+    """
     if expression is None:
         return None, None, None
     if not isinstance(expression, ConditionBase):
@@ -60,6 +86,7 @@ def _condition_expressions(
     *,
     builder: CustomConditionExpressionBuilder | None = None,
 ) -> ConditionExpression:
+    """Build a request fragment for write-style condition expressions."""
     dynamo_expression = {}
     condition, names, values = _build_condition_expression(
         model, expression, is_key_condition=False, custom_builder=builder
@@ -79,6 +106,7 @@ def _key_condition_expressions(
     *,
     builder: CustomConditionExpressionBuilder | None = None,
 ) -> KeyConditionExpression:
+    """Build a request fragment for query key conditions."""
     dynamo_expression = {}
     condition, names, values = _build_condition_expression(
         model, expression, is_key_condition=True, custom_builder=builder
@@ -99,6 +127,11 @@ def _add_filter_expressions(
     query_args: dict[str, Any],
     builder: CustomConditionExpressionBuilder | None = None,
 ) -> FilterExpression:
+    """Merge filter expressions into an existing query argument payload.
+
+    This mutates ``query_args`` so callers can share placeholder state across
+    key conditions, filters, and projections.
+    """
     condition, names, values = _build_condition_expression(
         model, expression, is_key_condition=False, custom_builder=builder
     )
@@ -118,7 +151,8 @@ def _add_filter_expressions(
 def _projection_expression(
     model: type[DynamoModel],
     projection_expression: ProjectionExpressionArg | None,
-) -> dict[str, Any]:
+) -> ProjectionExpression:
+    """Build a request fragment for projection expressions."""
     if projection_expression is None:
         return {}
 

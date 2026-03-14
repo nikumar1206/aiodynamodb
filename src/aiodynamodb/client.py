@@ -11,6 +11,7 @@ import aioboto3
 from types_aiobotocore_dynamodb import DynamoDBServiceResource
 from types_aiobotocore_dynamodb.literals import BillingModeType, TableClassType
 from types_aiobotocore_dynamodb.type_defs import (
+    AttributeDefinitionTypeDef,
     CreateGlobalTableInputTypeDef,
     CreateGlobalTableOutputTypeDef,
     CreateTableInputTypeDef,
@@ -194,17 +195,18 @@ class DynamoDB:
         Args:
             model: ``DynamoModel`` subclass mapped to the target table.
             hash_key: Partition key value.
-            update_expression: Raw DynamoDB update expression string, or
-                high-level ``UpdateExpression`` built with ``U(...)``.
+            update_expression: Set of ``UpdateAttr(...)`` actions describing the
+                update to apply.
             range_key: Sort key value, when the table defines one.
             condition_expression: Optional conditional expression.
             return_values: Optional DynamoDB return mode (for example,
                 ``"ALL_NEW"``). When omitted, DynamoDB default behavior applies.
-            cast: Cast result to T
+            cast: When ``True``, validate the returned attributes as ``model``.
+                When ``False``, return a raw Python dictionary.
 
         Returns:
-            Parsed model instance when DynamoDB returns ``Attributes``, otherwise
-            ``None``.
+            Parsed model instance or raw item when DynamoDB returns
+            ``Attributes``; otherwise ``None``.
         """
         args: dict[str, Any] = {
             "Key": _build_key(model, hash_key=hash_key, range_key=range_key),
@@ -254,11 +256,13 @@ class DynamoDB:
             hash_key: Partition key value.
             range_key: Sort key value, when the table defines one.
             consistent_reads: Whether to use strongly consistent reads.
-            projection_expression: Optional projection expression.
-            cast: Cast result to T
+            projection_expression: Optional list of ``ProjectionAttr(...)``
+                paths to project.
+            cast: When ``True``, validate the returned item as ``model``.
+                When ``False``, return a raw Python dictionary.
 
         Returns:
-            Parsed model instance when found, otherwise ``None``.
+            Parsed model instance or raw item when found, otherwise ``None``.
         """
         meta = model.Meta
         key = {meta.hash_key: _serialize_custom_attribute(model, meta.hash_key, hash_key)}
@@ -309,11 +313,14 @@ class DynamoDB:
             consistent_read: Whether to use strongly consistent reads.
             scan_index_forward: Sort ascending when ``True``, descending when
                 ``False``.
-            projection_expression: Optional projection expression.
-            cast: Cast results to T
+            projection_expression: Optional list of ``ProjectionAttr(...)``
+                paths to project.
+            cast: When ``True``, validate page items as ``model``. When
+                ``False``, yield raw Python dictionaries.
 
         Yields:
-            ``QueryResult`` pages containing parsed model instances.
+            ``QueryResult`` pages containing parsed model instances or raw
+            Python dictionaries.
         """
         meta = model.Meta
 
@@ -380,9 +387,12 @@ class DynamoDB:
             requests: Ordered list of transaction get requests.
             return_consumed_capacity: Include consumed capacity information
                 (`"TOTAL"` in DynamoDB request).
+            cast: When ``True``, validate returned items as their request model.
+                When ``False``, return raw Python dictionaries.
 
         Returns:
-            Ordered list of parsed model instances (or ``None`` for missing items).
+            Ordered list of parsed model instances, raw items, or ``None`` for
+            missing items.
         """
         transact_items = []
         for request in requests:
@@ -522,6 +532,13 @@ class DynamoDB:
 
         Results are grouped by model type and include unprocessed keys from
         DynamoDB when throttling occurs.
+
+        Args:
+            requests: Ordered list of batch get requests.
+            return_consumed_capacity: Include consumed capacity information
+                (`"TOTAL"` in DynamoDB request).
+            cast: When ``True``, validate returned items as their request
+                model. When ``False``, return raw Python dictionaries.
         """
         table_to_model: dict[str, type[DynamoModel]] = {}
         request_items: dict[str, dict[str, Any]] = {}
@@ -678,7 +695,8 @@ class DynamoDB:
         if table_class:
             request["TableClass"] = table_class
         request["AttributeDefinitions"] = [
-            {"AttributeName": name, "AttributeType": attr_type} for name, attr_type in sorted(attribute_types.items())
+            AttributeDefinitionTypeDef(AttributeName=name, AttributeType=attr_type)
+            for name, attr_type in sorted(attribute_types.items())
         ]
 
         client: DynamoDBClient
@@ -688,11 +706,11 @@ class DynamoDB:
     async def create_global_table[T: DynamoModel](
         self, model: type[T], *, regions: list[str]
     ) -> CreateGlobalTableOutputTypeDef:
-        """Creates a global table from an existing table.
+        """Create a global table from an existing table.
 
         Args:
             model: ``DynamoModel`` subclass containing table metadata.
-            regions: the list of replica regions
+            regions: Replica regions to attach to the global table.
 
         Returns:
             Raw ``create_global_table`` response from the DynamoDB API.
