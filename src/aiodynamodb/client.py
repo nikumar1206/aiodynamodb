@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from types_aiobotocore_dynamodb.client import DynamoDBClient
     from types_aiobotocore_dynamodb.service_resource import Table
 
-from boto3.dynamodb.conditions import Attr, ConditionBase, Key, ConditionExpressionBuilder
+from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 
 from aiodynamodb._serializers import (
     SERIALIZER,
@@ -52,7 +52,7 @@ from aiodynamodb._serializers import (
 from aiodynamodb.conditions import CustomConditionExpressionBuilder
 from aiodynamodb.custom_types import KeyT, Timestamp, TimestampMicros, TimestampMillis, TimestampNanos
 from aiodynamodb.models import DynamoModel, QueryResult
-from aiodynamodb.updates import UpdateExpressionBuilder, UpdateAttr
+from aiodynamodb.updates import UpdateAttr, UpdateExpressionBuilder
 
 _KEY_TO_TYPE = {
     str: "S",

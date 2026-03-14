@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import Any, get_args, get_origin
 
-from boto3.dynamodb.conditions import ATTR_NAME_REGEX, AttributeBase, ConditionExpressionBuilder, \
-    BuiltConditionExpression, ConditionBase
-from boto3.exceptions import DynamoDBNeedsConditionError
+from boto3.dynamodb.conditions import (
+    ATTR_NAME_REGEX,
+    AttributeBase,
+    ConditionExpressionBuilder,
+)
 from pydantic import BaseModel
 
 from aiodynamodb._serializers import _serialize_custom_attribute
