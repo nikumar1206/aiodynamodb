@@ -86,14 +86,19 @@ class UpdateExpressionBuilder[T: BaseModel](CustomConditionExpressionBuilder[T])
         names: dict[str, str] = {}
         values: dict[str, Any] = {}
 
-        set_parts = [self._build_set_action(action, names, values) for action in expression if
-                     action.type == Action.SET]
-        remove_parts = [self._build_name_placeholder(action, names) for action in expression if
-                        action.type == Action.REMOVE]
-        add_parts = [self._build_add_delete_action(action, names, values) for action in expression if
-                     action.type == Action.ADD]
-        delete_parts = [self._build_add_delete_action(action, names, values) for action in expression if
-                        action.type == Action.DELETE]
+        set_parts = [
+            self._build_set_action(action, names, values) for action in expression if action.type == Action.SET
+        ]
+        remove_parts = [
+            self._build_name_placeholder(action, names) for action in expression if action.type == Action.REMOVE
+        ]
+        add_parts = [
+            self._build_add_delete_action(action, names, values) for action in expression if action.type == Action.ADD
+        ]
+        delete_parts = [
+            self._build_add_delete_action(action, names, values) for action in expression
+            if action.type == Action.DELETE
+        ]
 
         clauses: list[str] = []
         if set_parts:

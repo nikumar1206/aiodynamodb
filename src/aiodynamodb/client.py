@@ -131,7 +131,7 @@ class DynamoDB:
             range_key: KeyT | None = None,
             condition_expression: ConditionBase | None = None,
             return_values: str | None = None,
-    ) -> T | None:
+    ) -> dict[str, Any] | None:
         """Update an item by key and optionally return updated attributes.
 
         Args:
@@ -172,8 +172,6 @@ class DynamoDB:
         else:
             args["ExpressionAttributeNames"] = to_dynamo_compatible(built.expression_attribute_names)
             args["ExpressionAttributeValues"] = to_dynamo_compatible(built.expression_attribute_values)
-
-        args.update(condition_payload)
 
         async with self._resource() as resource:
             table: Table = await resource.Table(model.Meta.table_name)
@@ -410,28 +408,31 @@ class DynamoDB:
                     range_key=range_key,
                     update_expression=update_expression,
                     condition_expression=condition_expression,
-                    expression_attribute_names=expression_attribute_names,
-                    expression_attribute_values=expression_attribute_values,
                 ):
                     update_item: dict[str, Any] = {
                         "TableName": model.Meta.table_name,
                         "Key": _build_dynamo_key(model, hash_key=hash_key, range_key=range_key),
-                        "UpdateExpression": update_expression,
                     }
 
-                    user_names = expression_attribute_names or {}
-                    user_values = _to_dynamo_expression_values(expression_attribute_values or {})
-                    condition_payload = _condition_expressions_for_client(model, condition_expression)
-                    condition_names = condition_payload.pop("ExpressionAttributeNames", {}) or {}
-                    condition_values = condition_payload.pop("ExpressionAttributeValues", {}) or {}
-
-                    merged_names = _merge_expression_attributes(user_names, condition_names, kind="names")
-                    merged_values = _merge_expression_attributes(user_values, condition_values, kind="values")
-                    if merged_names:
-                        update_item["ExpressionAttributeNames"] = merged_names
-                    if merged_values:
-                        update_item["ExpressionAttributeValues"] = merged_values
+                    # global builder to avoid name conflicts
+                    condition_builder = UpdateExpressionBuilder(model)
+                    condition_payload = _condition_expressions(
+                        model,
+                        condition_expression,
+                        builder=condition_builder
+                    )
                     update_item.update(condition_payload)
+                    built = condition_builder.build_update_expression(update_expression)
+
+                    update_item["UpdateExpression"] = built.update_expression
+                    if "ExpressionAttributeNames" in update_item:
+                        update_item["ExpressionAttributeNames"].update(built.expression_attribute_names)
+                        update_item["ExpressionAttributeValues"].update(built.expression_attribute_values)
+                    else:
+                        update_item["ExpressionAttributeNames"] = built.expression_attribute_names
+                        update_item["ExpressionAttributeValues"] = built.expression_attribute_values
+
+                    update_item["ExpressionAttributeValues"] = _to_dynamo_expression_values(update_item["ExpressionAttributeValues"])
 
                     transact_items.append({"Update": update_item})
 
@@ -686,8 +687,10 @@ def _to_dynamo_expression_values(values: dict[str, Any]) -> dict[str, Any]:
 def _condition_expressions_for_client(
         model: type[DynamoModel],
         expression: ConditionBase | None,
+        *,
+        builder: CustomConditionExpressionBuilder | None = None,
 ) -> dict[str, Any]:
-    payload = _condition_expressions(model, expression)
+    payload = _condition_expressions(model, expression, builder=builder)
     if "ExpressionAttributeValues" in payload:
         payload["ExpressionAttributeValues"] = _to_dynamo_expression_values(payload["ExpressionAttributeValues"])
     return payload

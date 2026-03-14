@@ -11,6 +11,7 @@ from aiodynamodb import (
     TransactGet,
     TransactPut,
     TransactUpdate,
+    UpdateAttr,
 )
 from tests.entities import Basket, ComplexOrder, Item, User
 
@@ -103,10 +104,8 @@ async def test_transact_write_supports_update_operation(complex_order_table):
                 ComplexOrder,
                 hash_key="o1",
                 range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
-                update_expression="SET #tot = :new_total",
+                update_expression={UpdateAttr("total").set(250)},
                 condition_expression=Attr("total").gte(100),
-                expression_attribute_names={"#tot": "total"},
-                expression_attribute_values={":new_total": 250},
             )
         ]
     )
@@ -118,21 +117,3 @@ async def test_transact_write_supports_update_operation(complex_order_table):
     )
     assert updated is not None
     assert updated.total == 250
-
-
-async def test_transact_write_update_rejects_conflicting_expression_attribute_names():
-    db = DynamoDB()
-
-    with pytest.raises(ValueError):
-        await db.transact_write(
-            [
-                TransactUpdate(
-                    User,
-                    hash_key="u1",
-                    update_expression="SET #n = :name",
-                    condition_expression=Attr("name").exists(),
-                    expression_attribute_names={"#n0": "user_id"},
-                    expression_attribute_values={":name": "Alice"},
-                )
-            ]
-        )

@@ -16,6 +16,7 @@ from types_aiobotocore_dynamodb.type_defs import (
 
 from aiodynamodb._serializers import DESERIALIZER, SERIALIZER
 from aiodynamodb.custom_types import KeyT
+from aiodynamodb.updates import UpdateAttr
 
 
 @dataclass
@@ -224,11 +225,9 @@ class TransactUpdate[T: DynamoModel]:
 
     model: type[T]
     hash_key: KeyT
-    update_expression: str
+    update_expression: set[UpdateAttr]
     range_key: KeyT | None = None
     condition_expression: ConditionBase | None = None
-    expression_attribute_names: dict[str, str] | None = None
-    expression_attribute_values: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
