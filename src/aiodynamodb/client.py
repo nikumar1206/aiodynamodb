@@ -234,7 +234,7 @@ class DynamoDB:
             response = await table.update_item(**args)
 
         item = response.get("Attributes")
-        if item is None:
+        if not item:
             return None
         return _cast_to_model(cast, item, model)
 
@@ -245,7 +245,6 @@ class DynamoDB:
         hash_key: KeyT,
         range_key: KeyT | None = None,
         consistent_reads: bool = False,
-        attributes_to_get: list[str] | None = None,
         projection_expression: ProjectionExpressionArg | None = None,
         cast: bool = True,
     ) -> T | dict[str, Any] | None:
@@ -256,7 +255,6 @@ class DynamoDB:
             hash_key: Partition key value.
             range_key: Sort key value, when the table defines one.
             consistent_reads: Whether to use strongly consistent reads.
-            attributes_to_get: Optional legacy projection list of attribute names.
             projection_expression: Optional projection expression.
             cast: Cast result to T
 
@@ -273,8 +271,6 @@ class DynamoDB:
             Key=key,
             ConsistentRead=consistent_reads,
         )
-        if attributes_to_get:
-            args["AttributesToGet"] = attributes_to_get
         args.update(_projection_expression(model, projection_expression))
 
         async with self._resource() as resource:

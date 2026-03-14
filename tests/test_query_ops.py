@@ -3,7 +3,7 @@ from datetime import datetime
 from boto3.dynamodb.conditions import Attr, Key
 from pydantic_core import TzInfo
 
-from aiodynamodb import DynamoDB
+from aiodynamodb import DynamoDB, ProjectionAttr
 from tests.entities import Basket, ComplexOrder, Item, Order
 
 
@@ -226,6 +226,33 @@ async def test_query_can_return_raw_items(orders_table):
         "2026-01-01",
         "2026-01-02",
     ]
+
+
+async def test_query_supports_projection_expression_with_filter(complex_order_table):
+    db = DynamoDB()
+    basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
+
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            total=100,
+            basket=basket,
+        )
+    )
+
+    projected = []
+    async for page in db.query(
+        ComplexOrder,
+        key_condition_expression=Key("order_id").eq("o1"),
+        filter_expression=Attr("basket.items.qty").eq(1),
+        projection_expression=[ProjectionAttr("order_id"), ProjectionAttr("basket.items.qty")],
+        cast=False,
+    ):
+        projected.extend(page.items)
+
+    assert len(projected) == 1
+    assert projected[0]["order_id"] == "o1"
 
 
 async def test_deep_filter(complex_order_table):

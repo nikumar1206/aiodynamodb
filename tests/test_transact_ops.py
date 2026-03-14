@@ -7,6 +7,7 @@ from pydantic_core import TzInfo
 from aiodynamodb import (
     DynamoDB,
     DynamoModel,
+    ProjectionAttr,
     TransactConditionCheck,
     TransactDelete,
     TransactGet,
@@ -87,6 +88,27 @@ async def test_transact_get_parses_models_and_serializes_custom_keys(dynamo_reso
         ),
         None,
     ]
+
+
+async def test_transact_get_accepts_projection_expression(dynamo_resource):
+    db = dynamo_resource
+    await db.create_table(User)
+    await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
+
+    results = await db.transact_get(
+        [
+            TransactGet(
+                User,
+                hash_key="u1",
+                projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("name")],
+            )
+        ],
+        cast=False,
+    )
+
+    assert results[0] is not None
+    assert results[0]["user_id"] == "u1"
+    assert results[0]["name"] == "Alice"
 
 
 async def test_transact_write_supports_update_operation(complex_order_table):

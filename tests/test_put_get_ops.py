@@ -111,3 +111,18 @@ async def test_get_supports_projection_expression_model(users_table):
         "user_id": "u1",
         "name": "Alice",
     }
+
+
+async def test_get_supports_projection_expression_single_field(users_table):
+    db = DynamoDB()
+
+    await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
+
+    fetched = await db.get(
+        User,
+        hash_key="u1",
+        projection_expression=[ProjectionAttr("user_id")],
+        cast=False,
+    )
+
+    assert fetched == {"user_id": "u1"}
