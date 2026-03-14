@@ -70,7 +70,19 @@ class UpdateAttr(AttributeBase):
         return self
 
     def __hash__(self) -> int:
-        return hash((self.type, self.name, self.value))
+        return hash((self.type, self.name, _freeze_hashable(getattr(self, "value", None))))
+
+
+def _freeze_hashable(value: Any) -> Any:
+    # UpdateAttr instances live in sets, so nested mutable values must be
+    # converted into deterministic hashable shapes before hashing.
+    if isinstance(value, dict):
+        return tuple(sorted((k, _freeze_hashable(v)) for k, v in value.items()))
+    if isinstance(value, list | tuple):
+        return tuple(_freeze_hashable(v) for v in value)
+    if isinstance(value, set):
+        return tuple(sorted(_freeze_hashable(v) for v in value))
+    return value
 
 
 @dataclass
@@ -135,7 +147,7 @@ class UpdateExpressionBuilder[T: BaseModel](CustomConditionExpressionBuilder[T])
         names: dict[str, str],
         values: dict[str, Any],
     ) -> str:
-        name_placeholder = self._build_name_placeholder(action.name, names)
+        name_placeholder = self._build_name_placeholder(action, names)
         self._current_attribute_name = action.name
         value_placeholder = self._build_value_placeholder(action.value, values)
         return f"{name_placeholder} {value_placeholder}"

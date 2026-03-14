@@ -14,8 +14,13 @@ def _resolve_key_annotation(annotation: Any) -> type:
     origin = get_origin(annotation)
     if origin is None:
         return annotation
+    # Preserve container types like ``set[str]`` while unwrapping Annotated metadata.
+    if str(origin) == "typing.Annotated":
+        args = get_args(annotation)
+        if args:
+            return _resolve_key_annotation(args[0])
     args = [arg for arg in get_args(annotation) if arg is not type(None)]
-    if len(args) == 1:
+    if len(args) == 1 and len(args) != len(get_args(annotation)):
         return _resolve_key_annotation(args[0])
     return annotation
 

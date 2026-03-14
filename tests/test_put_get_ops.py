@@ -1,8 +1,11 @@
+from datetime import datetime
+
 import pytest
 from boto3.dynamodb.conditions import Attr
+from pydantic_core import TzInfo
 
-from aiodynamodb import DynamoDB, ProjectionAttr
-from tests.entities import Order, User
+from aiodynamodb import DynamoDB, DynamoModel, ProjectionAttr, table
+from tests.entities import Basket, ComplexOrder, Item, Order, User
 
 
 async def test_put_and_get(users_table):
@@ -126,3 +129,39 @@ async def test_get_supports_projection_expression_single_field(users_table):
     )
 
     assert fetched == {"user_id": "u1"}
+
+
+async def test_get_supports_specific_list_element(complex_order_table):
+    db = DynamoDB()
+    basket = Basket(items=[Item(qty=1, price=10.9, name="foo"), Item(qty=2, price=5.5, name="bar")])
+
+    created_at = datetime(2026, 1, 1, tzinfo=TzInfo(0))
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=created_at,
+            total=100,
+            basket=basket,
+        )
+    )
+
+    fetched = await db.get(ComplexOrder, hash_key="o1", range_key=created_at)
+
+    assert fetched is not None
+    assert fetched.basket.items[1].name == "bar"
+
+
+async def test_get_supports_specific_set_member(dynamo_resource):
+    @table("tagged_users", hash_key="user_id")
+    class TaggedUser(DynamoModel):
+        user_id: str
+        tags: set[str]
+
+    db = dynamo_resource
+    await db.create_table(TaggedUser)
+    await db.put(TaggedUser(user_id="u1", tags={"alpha", "beta"}))
+
+    fetched = await db.get(TaggedUser, hash_key="u1")
+
+    assert fetched is not None
+    assert "beta" in fetched.tags
