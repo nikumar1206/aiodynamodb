@@ -24,8 +24,28 @@ Example:
 
 from importlib.metadata import PackageNotFoundError, version
 
-from aiodynamodb.client import DynamoDB, Key, Page
-from aiodynamodb.models import DynamoModel, TableMeta, table
+from aiodynamodb import custom_types
+from aiodynamodb.client import (
+    DynamoDB,
+)
+from aiodynamodb.models import (
+    BatchDelete,
+    BatchGet,
+    BatchGetResult,
+    BatchPut,
+    BatchWriteResult,
+    DynamoModel,
+    Page,
+    TableMeta,
+    TransactConditionCheck,
+    TransactDelete,
+    TransactGet,
+    TransactPut,
+    TransactUpdate,
+    table,
+)
+from aiodynamodb.projection import ProjectionAttr
+from aiodynamodb.updates import UpdateAttr
 
 try:
     __version__ = version("aiodynamodb")
@@ -37,9 +57,22 @@ VERSION = __version__
 __all__ = [
     "DynamoDB",
     "DynamoModel",
-    "Key",
     "TableMeta",
     "Page",
+    "BatchGet",
+    "BatchPut",
+    "BatchDelete",
+    "BatchGetResult",
+    "BatchWriteResult",
+    "TransactGet",
+    "TransactPut",
+    "TransactDelete",
+    "TransactConditionCheck",
+    "TransactUpdate",
+    "ProjectionAttr",
+    "UpdateAttr",
+    "UpdateAttr",
     "table",
     "VERSION",
+    "custom_types",
 ]
