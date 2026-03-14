@@ -105,9 +105,16 @@ def _cast_to_model[T: DynamoModel](cast: bool, item: Raw, model: type[T], _is_ra
 
 
 def _merge_expression_attribute_names(
-    existing: dict[str, str] | None,
-    incoming: dict[str, str] | None,
+        existing: dict[str, str] | None,
+        incoming: dict[str, str] | None,
 ) -> dict[str, str] | None:
+    """Merge name placeholders and reject conflicting placeholder reuse.
+
+    DynamoDB requires a placeholder like ``#n0`` to always refer to the same
+    attribute name within a single request. This helper preserves existing
+    mappings, adds new ones, and raises ``ValueError`` if the same placeholder
+    is bound to a different attribute.
+    """
     if not existing:
         return dict(incoming) if incoming else None
     if not incoming:
@@ -213,12 +220,14 @@ class DynamoDB:
         built = condition_builder.build_update_expression(update_expression)
 
         args["UpdateExpression"] = built.update_expression
-        if "ExpressionAttributeNames" in args:
-            args["ExpressionAttributeNames"].update(_to_dynamo_compatible(built.expression_attribute_names))
-            args["ExpressionAttributeValues"].update(_to_dynamo_compatible(built.expression_attribute_values))
-        else:
-            args["ExpressionAttributeNames"] = _to_dynamo_compatible(built.expression_attribute_names)
-            args["ExpressionAttributeValues"] = _to_dynamo_compatible(built.expression_attribute_values)
+        args["ExpressionAttributeNames"] = _merge_expression_attribute_names(
+            args.get("ExpressionAttributeNames"),
+            _to_dynamo_compatible(built.expression_attribute_names),
+        )
+        args["ExpressionAttributeValues"] = (
+            args.get("ExpressionAttributeValues", {})
+            | _to_dynamo_compatible(built.expression_attribute_values)
+        )
 
         async with self._resource() as resource:
             table: Table = await resource.Table(model.Meta.table_name)
@@ -477,12 +486,14 @@ class DynamoDB:
                     built = condition_builder.build_update_expression(update_expression)
 
                     update_item["UpdateExpression"] = built.update_expression
-                    if "ExpressionAttributeNames" in update_item:
-                        update_item["ExpressionAttributeNames"].update(built.expression_attribute_names)
-                        update_item["ExpressionAttributeValues"].update(built.expression_attribute_values)
-                    else:
-                        update_item["ExpressionAttributeNames"] = built.expression_attribute_names
-                        update_item["ExpressionAttributeValues"] = built.expression_attribute_values
+                    update_item["ExpressionAttributeNames"] = _merge_expression_attribute_names(
+                        update_item.get("ExpressionAttributeNames"),
+                        built.expression_attribute_names,
+                    )
+                    # merge items
+                    update_item["ExpressionAttributeValues"] = (
+                        update_item.get("ExpressionAttributeValues", {}) | built.expression_attribute_values
+                    )
 
                     update_item["ExpressionAttributeValues"] = _to_dynamo_expression_values(
                         update_item["ExpressionAttributeValues"]
