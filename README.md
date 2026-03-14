@@ -10,6 +10,7 @@ Async DynamoDB client + lightweight model layer built on `aioboto3` and Pydantic
 - Query pagination with typed results.
 - Optional conditional writes/deletes.
 - Transactional reads/writes (`transact_get` / `transact_write`).
+- Batch reads/writes (`batch_get` / `batch_write`).
 - Helpers to create/delete tables from model metadata.
 
 ## Requirements
@@ -205,6 +206,35 @@ await db.delete(
 )
 ```
 
+### `update`
+
+Update one item by key:
+
+```python
+updated = await db.update(
+    User,
+    hash_key="u1",
+    update_expression="SET #n = :name",
+    expression_attribute_names={"#n": "name"},
+    expression_attribute_values={":name": "Bob"},
+    return_values="ALL_NEW",
+)
+print(updated)
+```
+
+High-level expression builder:
+
+```python
+from aiodynamodb import UpdateAttr, UpdateExpression
+
+updated = await db.update(
+    User,
+    hash_key="u1",
+    update_expression=UpdateExpression().set(UpdateAttr("name"), "Bob").remove(UpdateAttr("email")),
+    return_values="ALL_NEW",
+)
+```
+
 ### `query`
 
 `query` is an async generator yielding paginated `QueryResult[T]` values.
@@ -287,6 +317,39 @@ items = await db.transact_get(
         TransactGet(User, hash_key="u2"),
     ]
 )
+```
+
+### `batch_write`
+
+Write multiple items in one request (up to 25 operations per call):
+
+```python
+from aiodynamodb import BatchDelete, BatchPut
+
+result = await db.batch_write(
+    [
+        BatchPut(User(user_id="u1", name="Alice")),
+        BatchDelete(User, hash_key="u2"),
+    ]
+)
+print(result.unprocessed_items)
+```
+
+### `batch_get`
+
+Read multiple items in one request (up to 100 keys per call):
+
+```python
+from aiodynamodb import BatchGet
+
+result = await db.batch_get(
+    [
+        BatchGet(User, hash_key="u1"),
+        BatchGet(User, hash_key="u2"),
+    ]
+)
+print(result.items[User])
+print(result.unprocessed_keys)
 ```
 
 ### `exceptions`

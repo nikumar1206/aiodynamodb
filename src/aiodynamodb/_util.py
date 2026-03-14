@@ -38,15 +38,15 @@ def _build_condition_expression(
         expression: ConditionBase | None,
         *,
         is_key_condition: bool = False,
-        builder: CustomConditionExpressionBuilder | None = None,
+        custom_builder: CustomConditionExpressionBuilder | None = None,
         # needed as this is a statefiul object with autoincrementing values!
 ) -> tuple[ConditionExpression, ExpressionAttributeNamesT, ExpressionAttributeValuesT]:
     if expression is None:
         return None, None, None
     if not isinstance(expression, ConditionBase):
         return expression, {}, {}
-    builder = builder or CustomConditionExpressionBuilder(model)
-    built = builder.build_expression(expression, is_key_condition=is_key_condition)
+    custom_builder = custom_builder or CustomConditionExpressionBuilder(model)
+    built = custom_builder.build_expression(expression, is_key_condition=is_key_condition)
     return (
         built.condition_expression,
         built.attribute_name_placeholders,
@@ -65,7 +65,7 @@ def _condition_expressions(
         model,
         expression,
         is_key_condition=False,
-        builder=builder
+        custom_builder=builder
     )
     if condition is not None:
         dynamo_expression["ConditionExpression"] = condition
@@ -87,7 +87,7 @@ def _key_condition_expressions(
         model,
         expression,
         is_key_condition=True,
-        builder=builder
+        custom_builder=builder
     )
     if condition is not None:
         dynamo_expression["KeyConditionExpression"] = condition
@@ -109,7 +109,7 @@ def _add_filter_expressions(
         model,
         expression,
         is_key_condition=False,
-        builder=builder
+        custom_builder=builder
     )
     if condition is not None:
         query_args["FilterExpression"] = condition

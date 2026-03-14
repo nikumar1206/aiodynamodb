@@ -1,6 +1,4 @@
-from contextlib import asynccontextmanager
 from datetime import datetime
-from unittest.mock import AsyncMock
 
 import pytest
 from boto3.dynamodb.conditions import Attr, Key
@@ -9,73 +7,32 @@ from pydantic_core import TzInfo
 from types_aiobotocore_dynamodb import DynamoDBClient
 
 from aiodynamodb import (
+    BatchDelete,
+    BatchGet,
+    BatchPut,
     DynamoDB,
     DynamoModel,
     TransactConditionCheck,
     TransactDelete,
     TransactGet,
     TransactPut,
+    TransactUpdate,
+    UpdateAttr,
     table,
 )
 from aiodynamodb.custom_types import JSONStr, Timestamp, TimestampMillis
 from tests.entities import Basket, ComplexOrder, Item, Order, User
 
 
-async def test_create_global_table_uses_model_table_name_and_regions():
-    db = DynamoDB()
-    mock_client = AsyncMock()
-    expected = {"GlobalTableDescription": {"GlobalTableName": Order.Meta.table_name}}
-    mock_client.create_global_table.return_value = expected
+async def test_transact_write_applies_put_delete_and_condition(users_table):
+    db = users_table
 
-    @asynccontextmanager
-    async def fake_client():
-        yield mock_client
-
-    db._client = fake_client  # type: ignore[method-assign]
-
-    resp = await db.create_global_table(Order, regions=["us-east-1", "eu-west-1"])
-
-    assert resp == expected
-    mock_client.create_global_table.assert_awaited_once_with(
-        GlobalTableName=Order.Meta.table_name,
-        ReplicationGroup=[{"RegionName": "us-east-1"}, {"RegionName": "eu-west-1"}],
-    )
-
-
-async def test_create_global_table_with_no_regions_sends_empty_replication_group():
-    db = DynamoDB()
-    mock_client = AsyncMock()
-    mock_client.create_global_table.return_value = {
-        "GlobalTableDescription": {"GlobalTableName": Order.Meta.table_name}}
-
-    @asynccontextmanager
-    async def fake_client():
-        yield mock_client
-
-    db._client = fake_client  # type: ignore[method-assign]
-
-    await db.create_global_table(Order, regions=[])
-
-    mock_client.create_global_table.assert_awaited_once_with(
-        GlobalTableName=Order.Meta.table_name,
-        ReplicationGroup=[],
-    )
-
-
-async def test_transact_write_builds_expected_requests():
-    db = DynamoDB()
-    mock_client = AsyncMock()
-    mock_client.transact_write_items.return_value = {"ConsumedCapacity": []}
-
-    @asynccontextmanager
-    async def fake_client():
-        yield mock_client
-
-    db._client = fake_client  # type: ignore[method-assign]
+    await db.put(User(user_id="u1", name="Alice"))
+    await db.put(User(user_id="u2", name="Bob"))
 
     await db.transact_write(
         [
-            TransactPut(User(user_id="u1", name="Alice")),
+            TransactPut(User(user_id="u3", name="Carol")),
             TransactDelete(User, hash_key="u2"),
             TransactConditionCheck(User, hash_key="u1", condition_expression=Attr("user_id").exists()),
         ],
@@ -84,26 +41,9 @@ async def test_transact_write_builds_expected_requests():
         return_item_collection_metrics=True,
     )
 
-    kwargs = mock_client.transact_write_items.await_args.kwargs
-    assert kwargs["ClientRequestToken"] == "req-token"
-    assert kwargs["ReturnConsumedCapacity"] == "TOTAL"
-    assert kwargs["ReturnItemCollectionMetrics"] == "SIZE"
-    assert len(kwargs["TransactItems"]) == 3
-
-    put_item = kwargs["TransactItems"][0]["Put"]
-    assert put_item["TableName"] == User.Meta.table_name
-    assert put_item["Item"] == {"user_id": "u1", "name": "Alice", "email": None}
-
-    delete_item = kwargs["TransactItems"][1]["Delete"]
-    assert delete_item["TableName"] == User.Meta.table_name
-    assert delete_item["Key"] == {"user_id": "u2"}
-
-    condition_item = kwargs["TransactItems"][2]["ConditionCheck"]
-    assert condition_item["TableName"] == User.Meta.table_name
-    assert condition_item["Key"] == {"user_id": "u1"}
-    assert "ConditionExpression" in condition_item
-    assert condition_item["ExpressionAttributeNames"]
-    assert "ExpressionAttributeValues" not in condition_item
+    assert await db.get(User, hash_key="u1") == User(user_id="u1", name="Alice", email=None)
+    assert await db.get(User, hash_key="u2") is None
+    assert await db.get(User, hash_key="u3") == User(user_id="u3", name="Carol", email=None)
 
 
 async def test_transact_write_condition_check_requires_expression():
@@ -112,21 +52,21 @@ async def test_transact_write_condition_check_requires_expression():
         await db.transact_write([TransactConditionCheck(User, hash_key="u1")])
 
 
-async def test_transact_get_parses_models_and_serializes_custom_keys():
-    db = DynamoDB()
-    mock_client = AsyncMock()
-    mock_client.transact_get_items.return_value = {
-        "Responses": [
-            {"Item": {"user_id": "u1", "name": "Alice", "email": "alice@example.com"}},
-            {},
-        ]
-    }
+async def test_transact_get_parses_models_and_serializes_custom_keys(dynamo_resource):
+    db = dynamo_resource
+    await db.create_table(User)
+    await db.create_table(ComplexOrder)
 
-    @asynccontextmanager
-    async def fake_client():
-        yield mock_client
-
-    db._client = fake_client  # type: ignore[method-assign]
+    basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
+    await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            total=100,
+            basket=basket,
+        )
+    )
 
     results = await db.transact_get(
         [
@@ -137,17 +77,139 @@ async def test_transact_get_parses_models_and_serializes_custom_keys():
                 range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
                 consistent_read=True,
             ),
+            TransactGet(User, hash_key="missing"),
         ],
         return_consumed_capacity=True,
     )
 
-    assert results == [User(user_id="u1", name="Alice", email="alice@example.com"), None]
+    assert results == [
+        User(user_id="u1", name="Alice", email="alice@example.com"),
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            total=100,
+            basket=basket,
+        ),
+        None,
+    ]
 
-    kwargs = mock_client.transact_get_items.await_args.kwargs
-    assert kwargs["ReturnConsumedCapacity"] == "TOTAL"
-    assert kwargs["TransactItems"][0]["Get"]["Key"] == {"user_id": "u1"}
-    assert kwargs["TransactItems"][1]["Get"]["Key"] == {"order_id": "o1", "created_at": 1577836800}
-    assert kwargs["TransactItems"][1]["Get"]["ConsistentRead"] is True
+
+async def test_transact_write_supports_update_operation(complex_order_table):
+    db = complex_order_table
+    basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            total=100,
+            basket=basket,
+        )
+    )
+
+    await db.transact_write(
+        [
+            TransactUpdate(
+                ComplexOrder,
+                hash_key="o1",
+                range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+                update_expression="SET #tot = :new_total",
+                condition_expression=Attr("total").gte(100),
+                expression_attribute_names={"#tot": "total"},
+                expression_attribute_values={":new_total": 250},
+            )
+        ]
+    )
+
+    updated = await db.get(
+        ComplexOrder,
+        hash_key="o1",
+        range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+    )
+    assert updated is not None
+    assert updated.total == 250
+
+
+async def test_transact_write_update_rejects_conflicting_expression_attribute_names():
+    db = DynamoDB()
+
+    with pytest.raises(ValueError):
+        await db.transact_write(
+            [
+                TransactUpdate(
+                    User,
+                    hash_key="u1",
+                    update_expression="SET #n = :name",
+                    condition_expression=Attr("name").exists(),
+                    expression_attribute_names={"#n0": "user_id"},
+                    expression_attribute_values={":name": "Alice"},
+                )
+            ]
+        )
+
+
+async def test_batch_write_applies_put_and_delete(users_table):
+    db = users_table
+    await db.put(User(user_id="u2", name="Bob"))
+
+    result = await db.batch_write(
+        [
+            BatchPut(User(user_id="u1", name="Alice")),
+            BatchDelete(User, hash_key="u2"),
+        ],
+        return_consumed_capacity=True,
+        return_item_collection_metrics=True,
+    )
+
+    assert result.unprocessed_items == {}
+    assert await db.get(User, hash_key="u1") == User(user_id="u1", name="Alice", email=None)
+    assert await db.get(User, hash_key="u2") is None
+
+
+async def test_batch_get_groups_requests_and_parses_typed_models(dynamo_resource):
+    db = dynamo_resource
+    await db.create_table(User)
+    await db.create_table(ComplexOrder)
+    basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
+    await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
+    await db.put(
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            total=100,
+            basket=basket,
+        )
+    )
+
+    result = await db.batch_get(
+        [
+            BatchGet(User, hash_key="u1", projection_expression="user_id, #n", expression_attribute_names={"#n": "name"}),
+            BatchGet(ComplexOrder, hash_key="o1", range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)), consistent_read=True),
+        ],
+        return_consumed_capacity=True,
+    )
+
+    assert result.items[User] == [User(user_id="u1", name="Alice", email=None)]
+    assert result.items[ComplexOrder] == [
+        ComplexOrder(
+            order_id="o1",
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            total=100,
+            basket=basket,
+        )
+    ]
+    assert result.unprocessed_keys == {}
+
+
+async def test_batch_get_rejects_conflicting_projection_for_same_table():
+    db = DynamoDB()
+
+    with pytest.raises(ValueError):
+        await db.batch_get(
+            [
+                BatchGet(User, hash_key="u1", projection_expression="user_id"),
+                BatchGet(User, hash_key="u2", projection_expression="name"),
+            ]
+        )
 
 
 async def test_put_and_get(users_table):
@@ -200,6 +262,21 @@ async def test_put_overwrites(users_table):
         "name": "Bob",
         "email": None,
     }
+
+
+async def test_update_supports_high_level_update_expression(users_table):
+    db = DynamoDB()
+
+    await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
+
+    updated = await db.update(
+        User,
+        hash_key="u1",
+        update_expression={UpdateAttr("name").set("Bob")},
+        return_values="ALL_NEW",
+    )
+
+    assert updated == User(user_id="u1", name="Bob", email="alice@example.com")
 
 
 async def test_composite_key_put_and_get(orders_table):

@@ -216,3 +216,63 @@ class TransactConditionCheck[T: DynamoModel]:
     hash_key: KeyT
     condition_expression: ConditionBase
     range_key: KeyT | None = None
+
+
+@dataclass(frozen=True)
+class TransactUpdate[T: DynamoModel]:
+    """Update operation used by ``transact_write``."""
+
+    model: type[T]
+    hash_key: KeyT
+    update_expression: str
+    range_key: KeyT | None = None
+    condition_expression: ConditionBase | None = None
+    expression_attribute_names: dict[str, str] | None = None
+    expression_attribute_values: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class BatchGet[T: DynamoModel]:
+    """Single item read request used by ``batch_get``."""
+
+    model: type[T]
+    hash_key: KeyT
+    range_key: KeyT | None = None
+    consistent_read: bool = False
+    projection_expression: str | None = None
+    expression_attribute_names: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class BatchPut[T: DynamoModel]:
+    """Put operation used by ``batch_write``."""
+
+    item: T
+
+    @property
+    def model(self) -> T:
+        return type(self.item)
+
+
+@dataclass(frozen=True)
+class BatchDelete[T: DynamoModel]:
+    """Delete operation used by ``batch_write``."""
+
+    model: type[T]
+    hash_key: KeyT
+    range_key: KeyT | None = None
+
+
+@dataclass
+class BatchGetResult:
+    """Typed result returned by ``batch_get``."""
+
+    items: dict[type[DynamoModel], list[DynamoModel]]
+    unprocessed_keys: dict[str, Any]
+
+
+@dataclass
+class BatchWriteResult:
+    """Result returned by ``batch_write``."""
+
+    unprocessed_items: dict[str, list[dict[str, Any]]]

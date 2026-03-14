@@ -29,6 +29,11 @@ from aiodynamodb.client import (
     DynamoDB,
 )
 from aiodynamodb.models import (
+    BatchDelete,
+    BatchGet,
+    BatchGetResult,
+    BatchPut,
+    BatchWriteResult,
     DynamoModel,
     Page,
     TableMeta,
@@ -36,8 +41,10 @@ from aiodynamodb.models import (
     TransactDelete,
     TransactGet,
     TransactPut,
+    TransactUpdate,
     table,
 )
+from aiodynamodb.updates import UpdateAttr
 
 try:
     __version__ = version("aiodynamodb")
@@ -51,10 +58,18 @@ __all__ = [
     "DynamoModel",
     "TableMeta",
     "Page",
+    "BatchGet",
+    "BatchPut",
+    "BatchDelete",
+    "BatchGetResult",
+    "BatchWriteResult",
     "TransactGet",
     "TransactPut",
     "TransactDelete",
     "TransactConditionCheck",
+    "TransactUpdate",
+    "UpdateAttr",
+    "UpdateAttr",
     "table",
     "VERSION",
     "custom_types"

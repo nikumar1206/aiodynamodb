@@ -24,18 +24,35 @@ from aiodynamodb._util import (
     _condition_expressions,
     _key_condition_expressions,
 )
-from aiodynamodb.models import TransactConditionCheck, TransactDelete, TransactGet, TransactPut
+from aiodynamodb.models import (
+    BatchDelete,
+    BatchGet,
+    BatchGetResult,
+    BatchPut,
+    BatchWriteResult,
+    TransactConditionCheck,
+    TransactDelete,
+    TransactGet,
+    TransactPut,
+    TransactUpdate,
+)
 
 if TYPE_CHECKING:
     from types_aiobotocore_dynamodb.client import DynamoDBClient
     from types_aiobotocore_dynamodb.service_resource import Table
 
-from boto3.dynamodb.conditions import Attr, ConditionBase, Key
+from boto3.dynamodb.conditions import Attr, ConditionBase, Key, ConditionExpressionBuilder
 
-from aiodynamodb._serializers import _resolve_key_annotation, _serialize_custom_attribute, to_dynamo_compatible
+from aiodynamodb._serializers import (
+    SERIALIZER,
+    _resolve_key_annotation,
+    _serialize_custom_attribute,
+    to_dynamo_compatible,
+)
 from aiodynamodb.conditions import CustomConditionExpressionBuilder
 from aiodynamodb.custom_types import KeyT, Timestamp, TimestampMicros, TimestampMillis, TimestampNanos
 from aiodynamodb.models import DynamoModel, QueryResult
+from aiodynamodb.updates import UpdateExpressionBuilder, UpdateAttr
 
 _KEY_TO_TYPE = {
     str: "S",
@@ -50,8 +67,10 @@ _KEY_TO_TYPE = {
 }
 
 type TransactWriteOperation = (
-        TransactPut[DynamoModel] | TransactDelete[DynamoModel] | TransactConditionCheck[DynamoModel]
+        TransactPut[DynamoModel] | TransactDelete[DynamoModel] | TransactConditionCheck[DynamoModel] |
+        TransactUpdate[DynamoModel]
 )
+type BatchWriteOperation = BatchPut[DynamoModel] | BatchDelete[DynamoModel]
 
 
 class DynamoDB:
@@ -102,6 +121,68 @@ class DynamoDB:
         async with self._resource() as resource:
             table: Table = await resource.Table(item.Meta.table_name)
             await table.delete_item(Item=to_dynamo_compatible(item.model_dump()), **args)
+
+    async def update[T: DynamoModel](
+            self,
+            model: type[T],
+            *,
+            hash_key: KeyT,
+            update_expression: set[UpdateAttr],
+            range_key: KeyT | None = None,
+            condition_expression: ConditionBase | None = None,
+            return_values: str | None = None,
+    ) -> T | None:
+        """Update an item by key and optionally return updated attributes.
+
+        Args:
+            model: ``DynamoModel`` subclass mapped to the target table.
+            hash_key: Partition key value.
+            update_expression: Raw DynamoDB update expression string, or
+                high-level ``UpdateExpression`` built with ``U(...)``.
+            range_key: Sort key value, when the table defines one.
+            condition_expression: Optional conditional expression.
+            return_values: Optional DynamoDB return mode (for example,
+                ``"ALL_NEW"``). When omitted, DynamoDB default behavior applies.
+
+        Returns:
+            Parsed model instance when DynamoDB returns ``Attributes``, otherwise
+            ``None``.
+        """
+        args: dict[str, Any] = {
+            "Key": _build_key(model, hash_key=hash_key, range_key=range_key),
+        }
+        if return_values is not None:
+            args["ReturnValues"] = return_values
+
+        # global builder to avoid name conflicts
+        condition_builder = UpdateExpressionBuilder(model)
+
+        condition_payload = _condition_expressions(
+            model,
+            condition_expression,
+            builder=condition_builder
+        )
+        args.update(condition_payload)
+        built = condition_builder.build_update_expression(update_expression)
+
+        args["UpdateExpression"] = built.update_expression
+        if "ExpressionAttributeNames" in args:
+            args["ExpressionAttributeNames"].update(to_dynamo_compatible(built.expression_attribute_names))
+            args["ExpressionAttributeValues"].update(to_dynamo_compatible(built.expression_attribute_values))
+        else:
+            args["ExpressionAttributeNames"] = to_dynamo_compatible(built.expression_attribute_names)
+            args["ExpressionAttributeValues"] = to_dynamo_compatible(built.expression_attribute_values)
+
+        args.update(condition_payload)
+
+        async with self._resource() as resource:
+            table: Table = await resource.Table(model.Meta.table_name)
+            response = await table.update_item(**args)
+
+        item = response.get("Attributes")
+        if item is None:
+            return None
+        return model.model_validate(item)
 
     async def get[T: DynamoModel](
             self,
@@ -243,10 +324,8 @@ class DynamoDB:
         for request in requests:
             get_item: dict[str, Any] = {
                 "TableName": request.model.Meta.table_name,
-                "Key": _build_key(request.model, hash_key=request.hash_key, range_key=request.range_key),
+                "Key": _build_dynamo_key(request.model, hash_key=request.hash_key, range_key=request.range_key),
             }
-            if request.consistent_read:
-                get_item["ConsistentRead"] = True
             if request.projection_expression is not None:
                 get_item["ProjectionExpression"] = request.projection_expression
             if request.expression_attribute_names is not None:
@@ -268,7 +347,7 @@ class DynamoDB:
             if item is None:
                 results.append(None)
                 continue
-            results.append(request.model.model_validate(item))
+            results.append(request.model.from_dynamo(item))
         if len(results) < len(requests):
             results.extend([None] * (len(requests) - len(results)))
         return results
@@ -283,18 +362,18 @@ class DynamoDB:
     ) -> dict[str, Any]:
         """Execute up to 100 transactional write operations atomically.
 
-        Supported operations are ``TransactPut``, ``TransactDelete``, and
-        ``TransactConditionCheck``.
+        Supported operations are ``TransactPut``, ``TransactDelete``,
+        ``TransactConditionCheck``, and ``TransactUpdate``.
         """
         transact_items: list[dict[str, Any]] = []
         for operation in operations:
             match operation:
-                case TransactPut(item=item, condition_expression=condition_expression) as p:
+                case TransactPut(condition_expression=condition_expression) as p:
                     put_item: dict[str, Any] = {
                         "TableName": p.model.Meta.table_name,
-                        "Item": to_dynamo_compatible(item.model_dump()),
+                        "Item": p.item.to_dynamo(),
                     }
-                    dynamo_condition = _condition_expressions(p.model, condition_expression)
+                    dynamo_condition = _condition_expressions_for_client(p.model, condition_expression)
                     put_item.update(dynamo_condition)
                     transact_items.append({"Put": put_item})
 
@@ -306,9 +385,9 @@ class DynamoDB:
                 ):
                     delete_item: dict[str, Any] = {
                         "TableName": model.Meta.table_name,
-                        "Key": _build_key(model, hash_key=hash_key, range_key=range_key),
+                        "Key": _build_dynamo_key(model, hash_key=hash_key, range_key=range_key),
                     }
-                    dynamo_condition = _condition_expressions(p.model, condition_expression)
+                    dynamo_condition = _condition_expressions_for_client(model, condition_expression)
                     delete_item.update(dynamo_condition)
                     transact_items.append({"Delete": delete_item})
                     continue
@@ -319,11 +398,42 @@ class DynamoDB:
                                             condition_expression=condition_expression):
                     condition_item: dict[str, Any] = {
                         "TableName": model.Meta.table_name,
-                        "Key": _build_key(model, hash_key=hash_key, range_key=range_key),
+                        "Key": _build_dynamo_key(model, hash_key=hash_key, range_key=range_key),
                     }
-                    dynamo_condition = _condition_expressions(model, condition_expression)
+                    dynamo_condition = _condition_expressions_for_client(model, condition_expression)
                     condition_item.update(dynamo_condition)
                     transact_items.append({"ConditionCheck": condition_item})
+
+                case TransactUpdate(
+                    model=model,
+                    hash_key=hash_key,
+                    range_key=range_key,
+                    update_expression=update_expression,
+                    condition_expression=condition_expression,
+                    expression_attribute_names=expression_attribute_names,
+                    expression_attribute_values=expression_attribute_values,
+                ):
+                    update_item: dict[str, Any] = {
+                        "TableName": model.Meta.table_name,
+                        "Key": _build_dynamo_key(model, hash_key=hash_key, range_key=range_key),
+                        "UpdateExpression": update_expression,
+                    }
+
+                    user_names = expression_attribute_names or {}
+                    user_values = _to_dynamo_expression_values(expression_attribute_values or {})
+                    condition_payload = _condition_expressions_for_client(model, condition_expression)
+                    condition_names = condition_payload.pop("ExpressionAttributeNames", {}) or {}
+                    condition_values = condition_payload.pop("ExpressionAttributeValues", {}) or {}
+
+                    merged_names = _merge_expression_attributes(user_names, condition_names, kind="names")
+                    merged_values = _merge_expression_attributes(user_values, condition_values, kind="values")
+                    if merged_names:
+                        update_item["ExpressionAttributeNames"] = merged_names
+                    if merged_values:
+                        update_item["ExpressionAttributeValues"] = merged_values
+                    update_item.update(condition_payload)
+
+                    transact_items.append({"Update": update_item})
 
                 case _ as impossible:
                     assert_never(impossible)
@@ -339,6 +449,95 @@ class DynamoDB:
         client: DynamoDBClient
         async with self._client() as client:
             return await client.transact_write_items(**args)
+
+    async def batch_get(
+            self,
+            requests: list[BatchGet[DynamoModel]],
+            *,
+            return_consumed_capacity=False,
+    ) -> BatchGetResult:
+        """Fetch up to 100 items using DynamoDB ``batch_get_item``.
+
+        Results are grouped by model type and include unprocessed keys from
+        DynamoDB when throttling occurs.
+        """
+        table_to_model: dict[str, type[DynamoModel]] = {}
+        request_items: dict[str, dict[str, Any]] = {}
+        for request in requests:
+            table_name = request.model.Meta.table_name
+            table_to_model[table_name] = request.model
+            table_entry = request_items.setdefault(table_name, {"Keys": []})
+            table_entry["Keys"].append(_build_dynamo_key(request.model, hash_key=request.hash_key, range_key=request.range_key))
+
+            if request.consistent_read:
+                existing = table_entry.get("ConsistentRead")
+                if existing is False:
+                    raise ValueError(f"Conflicting consistent_read values for table '{table_name}'.")
+                table_entry["ConsistentRead"] = True
+            if request.projection_expression is not None:
+                existing = table_entry.get("ProjectionExpression")
+                if existing is not None and existing != request.projection_expression:
+                    raise ValueError(f"Conflicting projection_expression values for table '{table_name}'.")
+                table_entry["ProjectionExpression"] = request.projection_expression
+            if request.expression_attribute_names is not None:
+                existing = table_entry.get("ExpressionAttributeNames")
+                if existing is not None and existing != request.expression_attribute_names:
+                    raise ValueError(f"Conflicting expression_attribute_names values for table '{table_name}'.")
+                table_entry["ExpressionAttributeNames"] = request.expression_attribute_names
+
+        args: dict[str, Any] = {"RequestItems": request_items}
+        if return_consumed_capacity:
+            args["ReturnConsumedCapacity"] = "TOTAL"
+
+        client: DynamoDBClient
+        async with self._client() as client:
+            response = await client.batch_get_item(**args)
+
+        parsed_items: dict[type[DynamoModel], list[DynamoModel]] = {}
+        for table_name, items in response.get("Responses", {}).items():
+            model = table_to_model.get(table_name)
+            if model is None:
+                continue
+            parsed_items[model] = [model.from_dynamo(item) for item in items]
+        return BatchGetResult(
+            items=parsed_items,
+            unprocessed_keys=response.get("UnprocessedKeys", {}),
+        )
+
+    async def batch_write(
+            self,
+            operations: list[BatchWriteOperation],
+            *,
+            return_consumed_capacity=False,
+            return_item_collection_metrics=False,
+    ) -> BatchWriteResult:
+        """Write up to 25 items per request using DynamoDB ``batch_write_item``."""
+
+        request_items: dict[str, list[dict[str, Any]]] = {}
+        for operation in operations:
+            match operation:
+                case BatchPut(item=item) as p:
+                    request_items.setdefault(p.model.Meta.table_name, []).append(
+                        {"PutRequest": {"Item": item.to_dynamo()}}
+                    )
+                case BatchDelete(model=model, hash_key=hash_key, range_key=range_key):
+                    request_items.setdefault(model.Meta.table_name, []).append(
+                        {"DeleteRequest": {"Key": _build_dynamo_key(model, hash_key=hash_key, range_key=range_key)}}
+                    )
+                case _ as impossible:
+                    assert_never(impossible)
+
+        args: dict[str, Any] = {"RequestItems": request_items}
+        if return_consumed_capacity:
+            args["ReturnConsumedCapacity"] = "TOTAL"
+        if return_item_collection_metrics:
+            args["ReturnItemCollectionMetrics"] = "SIZE"
+
+        client: DynamoDBClient
+        async with self._client() as client:
+            response = await client.batch_write_item(**args)
+
+        return BatchWriteResult(unprocessed_items=response.get("UnprocessedItems", {}))
 
     async def create_table[T: DynamoModel](
             self,
@@ -472,3 +671,37 @@ def _build_key(model: type[DynamoModel], *, hash_key: KeyT, range_key: KeyT | No
     if meta.range_key and range_key is not None:
         key[meta.range_key] = _serialize_custom_attribute(model, meta.range_key, range_key)
     return key
+
+
+def _build_dynamo_key(model: type[DynamoModel], *, hash_key: KeyT, range_key: KeyT | None = None) -> dict[str, Any]:
+    key = _build_key(model, hash_key=hash_key, range_key=range_key)
+    return {k: SERIALIZER._to_dynamo(v) for k, v in key.items()}
+
+
+def _to_dynamo_expression_values(values: dict[str, Any]) -> dict[str, Any]:
+    serialized = to_dynamo_compatible(values)
+    return {k: SERIALIZER._to_dynamo(v) for k, v in serialized.items()}
+
+
+def _condition_expressions_for_client(
+        model: type[DynamoModel],
+        expression: ConditionBase | None,
+) -> dict[str, Any]:
+    payload = _condition_expressions(model, expression)
+    if "ExpressionAttributeValues" in payload:
+        payload["ExpressionAttributeValues"] = _to_dynamo_expression_values(payload["ExpressionAttributeValues"])
+    return payload
+
+
+def _merge_expression_attributes(
+        left: dict[str, Any],
+        right: dict[str, Any],
+        *,
+        kind: str,
+) -> dict[str, Any]:
+    merged = dict(left)
+    for key, value in right.items():
+        if key in merged and merged[key] != value:
+            raise ValueError(f"Conflicting expression attribute {kind} for placeholder '{key}'.")
+        merged[key] = value
+    return merged
