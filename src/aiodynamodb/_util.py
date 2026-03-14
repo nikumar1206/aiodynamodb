@@ -14,7 +14,6 @@ type ExpressionAttributeNamesT = dict[str, str] | None
 type ExpressionAttributeValuesT = dict[str, UniversalAttributeValueTypeDef] | None
 
 
-
 class ConditionExpression(TypedDict):
     ConditionExpression: ConditionExpressionT
     ExpressionAttributeNamesT: ExpressionAttributeNamesT
@@ -34,12 +33,12 @@ class FilterExpression(TypedDict):
 
 
 def _build_condition_expression(
-        model: type[BaseModel],
-        expression: ConditionBase | None,
-        *,
-        is_key_condition: bool = False,
-        custom_builder: CustomConditionExpressionBuilder | None = None,
-        # needed as this is a statefiul object with autoincrementing values!
+    model: type[BaseModel],
+    expression: ConditionBase | None,
+    *,
+    is_key_condition: bool = False,
+    custom_builder: CustomConditionExpressionBuilder | None = None,
+    # needed as this is a statefiul object with autoincrementing values!
 ) -> tuple[ConditionExpression, ExpressionAttributeNamesT, ExpressionAttributeValuesT]:
     if expression is None:
         return None, None, None
@@ -55,17 +54,14 @@ def _build_condition_expression(
 
 
 def _condition_expressions(
-        model: type[DynamoModel],
-        expression: ConditionBase | None,
-        *,
-        builder: CustomConditionExpressionBuilder | None = None
+    model: type[DynamoModel],
+    expression: ConditionBase | None,
+    *,
+    builder: CustomConditionExpressionBuilder | None = None,
 ) -> ConditionExpression:
     dynamo_expression = {}
     condition, names, values = _build_condition_expression(
-        model,
-        expression,
-        is_key_condition=False,
-        custom_builder=builder
+        model, expression, is_key_condition=False, custom_builder=builder
     )
     if condition is not None:
         dynamo_expression["ConditionExpression"] = condition
@@ -77,17 +73,14 @@ def _condition_expressions(
 
 
 def _key_condition_expressions(
-        model: type[DynamoModel],
-        expression: ConditionBase | None,
-        *,
-        builder: CustomConditionExpressionBuilder | None = None
+    model: type[DynamoModel],
+    expression: ConditionBase | None,
+    *,
+    builder: CustomConditionExpressionBuilder | None = None,
 ) -> KeyConditionExpression:
     dynamo_expression = {}
     condition, names, values = _build_condition_expression(
-        model,
-        expression,
-        is_key_condition=True,
-        custom_builder=builder
+        model, expression, is_key_condition=True, custom_builder=builder
     )
     if condition is not None:
         dynamo_expression["KeyConditionExpression"] = condition
@@ -99,17 +92,14 @@ def _key_condition_expressions(
 
 
 def _add_filter_expressions(
-        model: type[DynamoModel],
-        expression: ConditionBase | None,
-        *,
-        query_args: dict[str, Any],
-        builder: CustomConditionExpressionBuilder | None = None,
+    model: type[DynamoModel],
+    expression: ConditionBase | None,
+    *,
+    query_args: dict[str, Any],
+    builder: CustomConditionExpressionBuilder | None = None,
 ) -> FilterExpression:
     condition, names, values = _build_condition_expression(
-        model,
-        expression,
-        is_key_condition=False,
-        custom_builder=builder
+        model, expression, is_key_condition=False, custom_builder=builder
     )
     if condition is not None:
         query_args["FilterExpression"] = condition

@@ -46,6 +46,7 @@ class UpdateAttr(AttributeBase):
     This inherits from boto3 ``AttributeBase`` so placeholder handling can reuse
     the same builder machinery as condition expressions.
     """
+
     type: Action
     value: Any
 
@@ -96,7 +97,8 @@ class UpdateExpressionBuilder[T: BaseModel](CustomConditionExpressionBuilder[T])
             self._build_add_delete_action(action, names, values) for action in expression if action.type == Action.ADD
         ]
         delete_parts = [
-            self._build_add_delete_action(action, names, values) for action in expression
+            self._build_add_delete_action(action, names, values)
+            for action in expression
             if action.type == Action.DELETE
         ]
 
@@ -117,10 +119,10 @@ class UpdateExpressionBuilder[T: BaseModel](CustomConditionExpressionBuilder[T])
         )
 
     def _build_set_action(
-            self,
-            action: UpdateAttr,
-            names: dict[str, str],
-            values: dict[str, Any],
+        self,
+        action: UpdateAttr,
+        names: dict[str, str],
+        values: dict[str, Any],
     ) -> str:
         name_placeholder = self._build_name_placeholder(action, names)
         self._current_attribute_name = action.name
@@ -128,10 +130,10 @@ class UpdateExpressionBuilder[T: BaseModel](CustomConditionExpressionBuilder[T])
         return f"{name_placeholder} = {value_placeholder}"
 
     def _build_add_delete_action(
-            self,
-            action: UpdateAttr,
-            names: dict[str, str],
-            values: dict[str, Any],
+        self,
+        action: UpdateAttr,
+        names: dict[str, str],
+        values: dict[str, Any],
     ) -> str:
         name_placeholder = self._build_name_placeholder(action.name, names)
         self._current_attribute_name = action.name

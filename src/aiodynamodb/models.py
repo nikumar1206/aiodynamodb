@@ -16,9 +16,11 @@ from types_aiobotocore_dynamodb.type_defs import (
 
 from aiodynamodb._serializers import DESERIALIZER, SERIALIZER, _to_dynamo_compatible
 from aiodynamodb.custom_types import KeyT
+from aiodynamodb.projection import ProjectionExpressionArg
 from aiodynamodb.updates import UpdateAttr
 
 type Raw = dict[str, Any]
+
 
 @dataclass
 class GSI:
@@ -189,8 +191,7 @@ class TransactGet[T: DynamoModel]:
     hash_key: KeyT
     range_key: KeyT | None = None
     consistent_read: bool = False
-    projection_expression: str | None = None
-    expression_attribute_names: dict[str, str] | None = None
+    projection_expression: ProjectionExpressionArg | None = None
 
 
 @dataclass(frozen=True)
@@ -244,7 +245,7 @@ class BatchGet[T: DynamoModel]:
     hash_key: KeyT
     range_key: KeyT | None = None
     consistent_read: bool = False
-    projection_expression: str | None = None
+    projection_expression: ProjectionExpressionArg | None = None
 
 
 @dataclass(frozen=True)

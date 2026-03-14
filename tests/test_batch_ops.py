@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 from pydantic_core import TzInfo
 
-from aiodynamodb import BatchDelete, BatchGet, BatchPut, DynamoDB
+from aiodynamodb import BatchDelete, BatchGet, BatchPut, DynamoDB, ProjectionAttr
 from tests.entities import Basket, ComplexOrder, Item, User
 
 
@@ -42,8 +42,10 @@ async def test_batch_get_groups_requests_and_parses_typed_models(dynamo_resource
 
     result = await db.batch_get(
         [
-            BatchGet(User, hash_key="u1", projection_expression="user_id, #n", expression_attribute_names={"#n": "name"}),
-            BatchGet(ComplexOrder, hash_key="o1", range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)), consistent_read=True),
+            BatchGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("name")]),
+            BatchGet(
+                ComplexOrder, hash_key="o1", range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)), consistent_read=True
+            ),
         ],
         return_consumed_capacity=True,
     )
@@ -66,8 +68,8 @@ async def test_batch_get_rejects_conflicting_projection_for_same_table():
     with pytest.raises(ValueError):
         await db.batch_get(
             [
-                BatchGet(User, hash_key="u1", projection_expression="user_id"),
-                BatchGet(User, hash_key="u2", projection_expression="name"),
+                BatchGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id")]),
+                BatchGet(User, hash_key="u2", projection_expression=[ProjectionAttr("name")]),
             ]
         )
 

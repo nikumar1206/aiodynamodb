@@ -44,6 +44,7 @@ from aiodynamodb.models import (
     TransactUpdate,
     table,
 )
+from aiodynamodb.projection import ProjectionAttr
 from aiodynamodb.updates import UpdateAttr
 
 try:
@@ -68,9 +69,10 @@ __all__ = [
     "TransactDelete",
     "TransactConditionCheck",
     "TransactUpdate",
+    "ProjectionAttr",
     "UpdateAttr",
     "UpdateAttr",
     "table",
     "VERSION",
-    "custom_types"
+    "custom_types",
 ]

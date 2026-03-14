@@ -1,8 +1,7 @@
-
 import pytest
 from boto3.dynamodb.conditions import Attr
 
-from aiodynamodb import DynamoDB
+from aiodynamodb import DynamoDB, ProjectionAttr
 from tests.entities import Order, User
 
 
@@ -93,4 +92,22 @@ async def test_composite_key_different_range_keys(orders_table):
         "order_id": "o1",
         "created_at": "2026-01-02",
         "total": 200,
+    }
+
+
+async def test_get_supports_projection_expression_model(users_table):
+    db = DynamoDB()
+
+    await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
+
+    fetched = await db.get(
+        User,
+        hash_key="u1",
+        projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("name")],
+        cast=False,
+    )
+
+    assert fetched == {
+        "user_id": "u1",
+        "name": "Alice",
     }

@@ -13,7 +13,7 @@ test: install-dev lint## Run tests
 
 .PHONY: lint
 lint: ## Lint
-	uv run ruff check src tests --fix
+	uv run ruff format src tests
 
 .PHONY: build
 build: test ## Run tests and build the package
