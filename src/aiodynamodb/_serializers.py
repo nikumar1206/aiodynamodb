@@ -19,6 +19,7 @@ def _resolve_key_annotation(annotation: Any) -> type:
         return _resolve_key_annotation(args[0])
     return annotation
 
+
 def _serilize_dynamo_primitives(value: Any) -> Any:
     """Recursively cast ``float`` values to ``Decimal`` for DynamoDB numbers."""
     if isinstance(value, float):
@@ -34,7 +35,7 @@ def _serilize_dynamo_primitives(value: Any) -> Any:
     return value
 
 
-def to_dynamo_compatible(value: Any) -> Any:
+def _to_dynamo_compatible(value: Any) -> Any:
     """Convert python values into forms accepted by boto DynamoDB serializers."""
     return _serilize_dynamo_primitives(value)
 

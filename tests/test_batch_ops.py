@@ -70,3 +70,22 @@ async def test_batch_get_rejects_conflicting_projection_for_same_table():
                 BatchGet(User, hash_key="u2", projection_expression="name"),
             ]
         )
+
+
+async def test_batch_get_can_return_raw_items(dynamo_resource):
+    db = dynamo_resource
+    await db.create_table(User)
+    await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
+
+    result = await db.batch_get(
+        [BatchGet(User, hash_key="u1")],
+        cast=False,
+    )
+
+    assert result.items[User] == [
+        {
+            "user_id": "u1",
+            "name": "Alice",
+            "email": "alice@example.com",
+        }
+    ]

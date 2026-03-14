@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
+from decimal import Decimal
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, assert_never
 
@@ -34,7 +35,7 @@ from aiodynamodb.models import (
     TransactDelete,
     TransactGet,
     TransactPut,
-    TransactUpdate,
+    TransactUpdate, Raw,
 )
 
 if TYPE_CHECKING:
@@ -47,7 +48,7 @@ from aiodynamodb._serializers import (
     SERIALIZER,
     _resolve_key_annotation,
     _serialize_custom_attribute,
-    to_dynamo_compatible,
+    _to_dynamo_compatible, DESERIALIZER
 )
 from aiodynamodb.conditions import CustomConditionExpressionBuilder
 from aiodynamodb.custom_types import KeyT, Timestamp, TimestampMicros, TimestampMillis, TimestampNanos
@@ -71,6 +72,30 @@ type TransactWriteOperation = (
         TransactUpdate[DynamoModel]
 )
 type BatchWriteOperation = BatchPut[DynamoModel] | BatchDelete[DynamoModel]
+
+
+def _normalize_python_value(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        if value % 1 == 0:
+            return int(value)
+        return float(value)
+    if isinstance(value, list):
+        return [_normalize_python_value(v) for v in value]
+    if isinstance(value, set):
+        return {_normalize_python_value(v) for v in value}
+    if isinstance(value, dict):
+        return {k: _normalize_python_value(v) for k, v in value.items()}
+    return value
+
+
+def _cast_to_model[T: DynamoModel](cast: bool, item: Raw, model: type[T], _is_raw_dynamo: bool = False):
+    if cast and _is_raw_dynamo:
+        return model.from_dynamo(item)
+    if cast:
+        return model.model_validate(item)
+    if _is_raw_dynamo:
+        return {k: DESERIALIZER._to_dynamo(v) for k, v in item.items()}
+    return {k: _normalize_python_value(v) for k, v in item.items()}
 
 
 class DynamoDB:
@@ -107,7 +132,7 @@ class DynamoDB:
         args = _condition_expressions(type(item), condition_expression)
         async with self._resource() as resource:
             table: Table = await resource.Table(item.Meta.table_name)
-            await table.put_item(Item=to_dynamo_compatible(item.model_dump()), **args)
+            await table.put_item(Item=item.to_dynamo_compatible(), **args)
 
     async def delete[T: DynamoModel](self, item: T, *, condition_expression: ConditionBase = None) -> None:
         """Delete an item from DynamoDB.
@@ -120,7 +145,7 @@ class DynamoDB:
         args = _condition_expressions(type(item), condition_expression)
         async with self._resource() as resource:
             table: Table = await resource.Table(item.Meta.table_name)
-            await table.delete_item(Item=to_dynamo_compatible(item.model_dump()), **args)
+            await table.delete_item(Item=item.to_dynamo_compatible(), **args)
 
     async def update[T: DynamoModel](
             self,
@@ -131,7 +156,8 @@ class DynamoDB:
             range_key: KeyT | None = None,
             condition_expression: ConditionBase | None = None,
             return_values: str | None = None,
-    ) -> dict[str, Any] | None:
+            cast: bool = True,
+    ) -> T | Raw | None:
         """Update an item by key and optionally return updated attributes.
 
         Args:
@@ -143,6 +169,7 @@ class DynamoDB:
             condition_expression: Optional conditional expression.
             return_values: Optional DynamoDB return mode (for example,
                 ``"ALL_NEW"``). When omitted, DynamoDB default behavior applies.
+            cast: Cast result to T
 
         Returns:
             Parsed model instance when DynamoDB returns ``Attributes``, otherwise
@@ -167,11 +194,11 @@ class DynamoDB:
 
         args["UpdateExpression"] = built.update_expression
         if "ExpressionAttributeNames" in args:
-            args["ExpressionAttributeNames"].update(to_dynamo_compatible(built.expression_attribute_names))
-            args["ExpressionAttributeValues"].update(to_dynamo_compatible(built.expression_attribute_values))
+            args["ExpressionAttributeNames"].update(_to_dynamo_compatible(built.expression_attribute_names))
+            args["ExpressionAttributeValues"].update(_to_dynamo_compatible(built.expression_attribute_values))
         else:
-            args["ExpressionAttributeNames"] = to_dynamo_compatible(built.expression_attribute_names)
-            args["ExpressionAttributeValues"] = to_dynamo_compatible(built.expression_attribute_values)
+            args["ExpressionAttributeNames"] = _to_dynamo_compatible(built.expression_attribute_names)
+            args["ExpressionAttributeValues"] = _to_dynamo_compatible(built.expression_attribute_values)
 
         async with self._resource() as resource:
             table: Table = await resource.Table(model.Meta.table_name)
@@ -180,7 +207,7 @@ class DynamoDB:
         item = response.get("Attributes")
         if item is None:
             return None
-        return model.model_validate(item)
+        return _cast_to_model(cast, item, model)
 
     async def get[T: DynamoModel](
             self,
@@ -190,7 +217,8 @@ class DynamoDB:
             range_key: KeyT | None = None,
             consistent_reads: bool = False,
             attributes_to_get: list[str] | None = None,
-    ) -> T | None:
+            cast: bool = True
+    ) -> T | dict[str, Any] | None:
         """Get a single item by primary key.
 
         Args:
@@ -199,6 +227,7 @@ class DynamoDB:
             range_key: Sort key value, when the table defines one.
             consistent_reads: Whether to use strongly consistent reads.
             attributes_to_get: Optional legacy projection list of attribute names.
+            cast: Cast result to T
 
         Returns:
             Parsed model instance when found, otherwise ``None``.
@@ -222,7 +251,7 @@ class DynamoDB:
             item = resp.get("Item")
             if item is None:
                 return None
-            return model.model_validate(item)
+        return _cast_to_model(cast, item, model)
 
     async def query[T: DynamoModel](
             self,
@@ -236,6 +265,7 @@ class DynamoDB:
             return_consumed_capacity=False,
             consistent_read: bool = False,
             scan_index_forward=False,
+            cast: bool = True,
     ) -> AsyncIterator[QueryResult[T]]:
         """Query items and yield paginated results.
 
@@ -251,6 +281,7 @@ class DynamoDB:
             consistent_read: Whether to use strongly consistent reads.
             scan_index_forward: Sort ascending when ``True``, descending when
                 ``False``.
+            cast: Cast results to T
 
         Yields:
             ``QueryResult`` pages containing parsed model instances.
@@ -295,7 +326,7 @@ class DynamoDB:
             while True:
                 page = await table.query(**query_args)
                 yield QueryResult(
-                    items=[model.model_validate(item) for item in page.get("Items", [])],
+                    items=[_cast_to_model(cast, item, model) for item in page.get("Items", [])],
                     last_evaluated_key=page.get("LastEvaluatedKey"),
                 )
                 if "LastEvaluatedKey" not in page:
@@ -307,6 +338,7 @@ class DynamoDB:
             requests: list[TransactGet[T]],
             *,
             return_consumed_capacity=False,
+            cast: bool = True
     ) -> list[T | None]:
         """Read up to 100 items atomically across one or more tables.
 
@@ -345,7 +377,8 @@ class DynamoDB:
             if item is None:
                 results.append(None)
                 continue
-            results.append(request.model.from_dynamo(item))
+            deserialized = _cast_to_model(cast, item, request.model, True)
+            results.append(deserialized)
         if len(results) < len(requests):
             results.extend([None] * (len(requests) - len(results)))
         return results
@@ -432,7 +465,8 @@ class DynamoDB:
                         update_item["ExpressionAttributeNames"] = built.expression_attribute_names
                         update_item["ExpressionAttributeValues"] = built.expression_attribute_values
 
-                    update_item["ExpressionAttributeValues"] = _to_dynamo_expression_values(update_item["ExpressionAttributeValues"])
+                    update_item["ExpressionAttributeValues"] = _to_dynamo_expression_values(
+                        update_item["ExpressionAttributeValues"])
 
                     transact_items.append({"Update": update_item})
 
@@ -456,6 +490,7 @@ class DynamoDB:
             requests: list[BatchGet[DynamoModel]],
             *,
             return_consumed_capacity=False,
+            cast: bool = True,
     ) -> BatchGetResult:
         """Fetch up to 100 items using DynamoDB ``batch_get_item``.
 
@@ -468,7 +503,8 @@ class DynamoDB:
             table_name = request.model.Meta.table_name
             table_to_model[table_name] = request.model
             table_entry = request_items.setdefault(table_name, {"Keys": []})
-            table_entry["Keys"].append(_build_dynamo_key(request.model, hash_key=request.hash_key, range_key=request.range_key))
+            table_entry["Keys"].append(
+                _build_dynamo_key(request.model, hash_key=request.hash_key, range_key=request.range_key))
 
             if request.consistent_read:
                 existing = table_entry.get("ConsistentRead")
@@ -480,7 +516,7 @@ class DynamoDB:
                 if existing is not None and existing != request.projection_expression:
                     raise ValueError(f"Conflicting projection_expression values for table '{table_name}'.")
                 table_entry["ProjectionExpression"] = request.projection_expression
-            if request.expression_attribute_names is not None:
+
                 existing = table_entry.get("ExpressionAttributeNames")
                 if existing is not None and existing != request.expression_attribute_names:
                     raise ValueError(f"Conflicting expression_attribute_names values for table '{table_name}'.")
@@ -494,12 +530,12 @@ class DynamoDB:
         async with self._client() as client:
             response = await client.batch_get_item(**args)
 
-        parsed_items: dict[type[DynamoModel], list[DynamoModel]] = {}
+        parsed_items: dict[type[DynamoModel], list[DynamoModel | dict[str, Any]]] = {}
         for table_name, items in response.get("Responses", {}).items():
             model = table_to_model.get(table_name)
             if model is None:
                 continue
-            parsed_items[model] = [model.from_dynamo(item) for item in items]
+            parsed_items[model] = [_cast_to_model(cast, item, model, True) for item in items]
         return BatchGetResult(
             items=parsed_items,
             unprocessed_keys=response.get("UnprocessedKeys", {}),
@@ -680,7 +716,7 @@ def _build_dynamo_key(model: type[DynamoModel], *, hash_key: KeyT, range_key: Ke
 
 
 def _to_dynamo_expression_values(values: dict[str, Any]) -> dict[str, Any]:
-    serialized = to_dynamo_compatible(values)
+    serialized = _to_dynamo_compatible(values)
     return {k: SERIALIZER._to_dynamo(v) for k, v in serialized.items()}
 
 

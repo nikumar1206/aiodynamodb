@@ -231,6 +231,27 @@ async def test_query_serializes_custom_key_condition_values(complex_order_table)
     assert [item.total for item in filtered] == [200, 300]
 
 
+async def test_query_can_return_raw_items(orders_table):
+    db = DynamoDB()
+
+    await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
+    await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
+
+    pages = []
+    async for page in db.query(
+            Order,
+            key_condition_expression=Key("order_id").eq("o1"),
+            scan_index_forward=True,
+            cast=False,
+    ):
+        pages.append(page)
+
+    assert [item["created_at"] for page in pages for item in page.items] == [
+        "2026-01-01",
+        "2026-01-02",
+    ]
+
+
 async def test_deep_filter(complex_order_table):
     db = DynamoDB()
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])

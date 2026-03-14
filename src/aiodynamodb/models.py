@@ -14,10 +14,11 @@ from types_aiobotocore_dynamodb.type_defs import (
     WarmThroughputTypeDef,
 )
 
-from aiodynamodb._serializers import DESERIALIZER, SERIALIZER
+from aiodynamodb._serializers import DESERIALIZER, SERIALIZER, _to_dynamo_compatible
 from aiodynamodb.custom_types import KeyT
 from aiodynamodb.updates import UpdateAttr
 
+type Raw = dict[str, Any]
 
 @dataclass
 class GSI:
@@ -113,6 +114,11 @@ class DynamoModel(BaseModel):
         dumped = self.model_dump(mode="json")
         return {k: SERIALIZER._to_dynamo(v) for k, v in dumped.items()}
 
+    def to_dynamo_compatible(self) -> dict[str, Any]:
+        """Serialize model fields to DynamoDB AttributeValue objects."""
+        dumped = self.model_dump(mode="json")
+        return _to_dynamo_compatible(dumped)
+
     @classmethod
     def from_dynamo(cls, raw: dict[str, Any]) -> Self:
         """Deserialize DynamoDB AttributeValue objects into a model instance."""
@@ -163,7 +169,7 @@ def table(name: str, hash_key: str, range_key: str | None = None, indexes: list[
 class QueryResult[T: DynamoModel]:
     """One page of typed query results."""
 
-    items: list[T]
+    items: list[T | Raw]
     last_evaluated_key: dict[str, Any] | None
 
 
@@ -239,7 +245,6 @@ class BatchGet[T: DynamoModel]:
     range_key: KeyT | None = None
     consistent_read: bool = False
     projection_expression: str | None = None
-    expression_attribute_names: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -263,10 +268,10 @@ class BatchDelete[T: DynamoModel]:
 
 
 @dataclass
-class BatchGetResult:
+class BatchGetResult[T: DynamoModel]:
     """Typed result returned by ``batch_get``."""
 
-    items: dict[type[DynamoModel], list[DynamoModel]]
+    items: dict[type[T], list[T | Raw]]
     unprocessed_keys: dict[str, Any]
 
 
