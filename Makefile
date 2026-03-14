@@ -5,15 +5,17 @@ install-dev: ## Install development dependencies
 
 .PHONY: upgrade
 upgrade: ## Upgrade dependencies
-	uv sync --upgrade
+	uv sync --upgrade  --all-extras
 
 .PHONY: test
 test: install-dev lint## Run tests
-	uv run pytest
+	uv run coverage run
+	uv run coverage report
+
 
 .PHONY: lint
 lint: ## Lint
-	uv run ruff format src tests
+	uv run ruff check --fix
 
 .PHONY: build
 build: test ## Run tests and build the package

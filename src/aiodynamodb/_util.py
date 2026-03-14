@@ -8,6 +8,7 @@ from types_aiobotocore_dynamodb.type_defs import UniversalAttributeValueTypeDef
 
 from aiodynamodb.conditions import CustomConditionExpressionBuilder
 from aiodynamodb.models import DynamoModel
+from aiodynamodb.projection import ProjectionExpressionArg, ProjectionExpressionBuilder
 
 type ConditionExpressionT = str | None
 type ExpressionAttributeNamesT = dict[str, str] | None
@@ -112,3 +113,20 @@ def _add_filter_expressions(
             existing_values.update(values)
             query_args["ExpressionAttributeValues"] = existing_values
     return query_args
+
+
+def _projection_expression(
+    model: type[DynamoModel],
+    projection_expression: ProjectionExpressionArg | None,
+) -> dict[str, Any]:
+    if projection_expression is None:
+        return {}
+
+    built = ProjectionExpressionBuilder(model).build_projection_expression(projection_expression)
+
+    payload: dict[str, Any] = {
+        "ProjectionExpression": built.projection_expression,
+    }
+    if built.expression_attribute_names:
+        payload["ExpressionAttributeNames"] = built.expression_attribute_names
+    return payload

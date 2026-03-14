@@ -24,6 +24,7 @@ from aiodynamodb._util import (
     _add_filter_expressions,
     _condition_expressions,
     _key_condition_expressions,
+    _projection_expression,
 )
 from aiodynamodb.models import (
     BatchDelete,
@@ -31,12 +32,12 @@ from aiodynamodb.models import (
     BatchGetResult,
     BatchPut,
     BatchWriteResult,
+    Raw,
     TransactConditionCheck,
     TransactDelete,
     TransactGet,
     TransactPut,
     TransactUpdate,
-    Raw,
 )
 
 if TYPE_CHECKING:
@@ -46,16 +47,16 @@ if TYPE_CHECKING:
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 
 from aiodynamodb._serializers import (
+    DESERIALIZER,
     SERIALIZER,
     _resolve_key_annotation,
     _serialize_custom_attribute,
     _to_dynamo_compatible,
-    DESERIALIZER,
 )
 from aiodynamodb.conditions import CustomConditionExpressionBuilder
 from aiodynamodb.custom_types import KeyT, Timestamp, TimestampMicros, TimestampMillis, TimestampNanos
 from aiodynamodb.models import DynamoModel, QueryResult
-from aiodynamodb.projection import ProjectionExpressionArg, ProjectionExpressionBuilder
+from aiodynamodb.projection import ProjectionExpressionArg
 from aiodynamodb.updates import UpdateAttr, UpdateExpressionBuilder
 
 _KEY_TO_TYPE = {
@@ -119,23 +120,6 @@ def _merge_expression_attribute_names(
             raise ValueError(f"Conflicting expression_attribute_names value for placeholder '{key}'.")
         merged[key] = value
     return merged
-
-
-def _projection_expression(
-    model: type[DynamoModel],
-    projection_expression: ProjectionExpressionArg | None,
-) -> dict[str, Any]:
-    if projection_expression is None:
-        return {}
-
-    built = ProjectionExpressionBuilder(model).build_projection_expression(projection_expression)
-
-    payload: dict[str, Any] = {
-        "ProjectionExpression": built.projection_expression,
-    }
-    if built.expression_attribute_names:
-        payload["ExpressionAttributeNames"] = built.expression_attribute_names
-    return payload
 
 
 class DynamoDB:

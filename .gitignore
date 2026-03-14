@@ -11,3 +11,4 @@ wheels/
 ^.*
 /.idea/
 /agent.md
+/.coverage
