@@ -105,8 +105,8 @@ def _cast_to_model[T: DynamoModel](cast: bool, item: Raw, model: type[T], _is_ra
 
 
 def _merge_expression_attribute_names(
-        existing: dict[str, str] | None,
-        incoming: dict[str, str] | None,
+    existing: dict[str, str] | None,
+    incoming: dict[str, str] | None,
 ) -> dict[str, str] | None:
     """Merge name placeholders and reject conflicting placeholder reuse.
 
@@ -224,9 +224,8 @@ class DynamoDB:
             args.get("ExpressionAttributeNames"),
             _to_dynamo_compatible(built.expression_attribute_names),
         )
-        args["ExpressionAttributeValues"] = (
-            args.get("ExpressionAttributeValues", {})
-            | _to_dynamo_compatible(built.expression_attribute_values)
+        args["ExpressionAttributeValues"] = args.get("ExpressionAttributeValues", {}) | _to_dynamo_compatible(
+            built.expression_attribute_values
         )
 
         async with self._resource() as resource:

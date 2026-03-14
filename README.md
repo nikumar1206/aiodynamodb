@@ -185,6 +185,19 @@ Composite key lookup:
 order = await db.get(Order, hash_key="o1", range_key="2026-01-01T00:00:00")
 ```
 
+Project selected attributes with `ProjectionAttr`:
+
+```python
+from aiodynamodb import ProjectionAttr
+
+user = await db.get(
+    User,
+    hash_key="u1",
+    projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("name")],
+    cast=False,
+)
+```
+
 Returns `None` if not found.
 
 ### `delete`
@@ -211,26 +224,41 @@ await db.delete(
 Update one item by key:
 
 ```python
+from aiodynamodb import UpdateAttr
+
 updated = await db.update(
     User,
     hash_key="u1",
-    update_expression="SET #n = :name",
-    expression_attribute_names={"#n": "name"},
-    expression_attribute_values={":name": "Bob"},
+    update_expression={UpdateAttr("name").set("Bob")},
     return_values="ALL_NEW",
 )
 print(updated)
 ```
 
-High-level expression builder:
+Remove, add, and delete actions use the same API:
 
 ```python
-from aiodynamodb import UpdateAttr, UpdateExpression
+from aiodynamodb import UpdateAttr
 
 updated = await db.update(
     User,
     hash_key="u1",
-    update_expression=UpdateExpression().set(UpdateAttr("name"), "Bob").remove(UpdateAttr("email")),
+    update_expression={
+        UpdateAttr("email").remove(),
+        UpdateAttr("login_count").add(1),
+    },
+    return_values="ALL_NEW",
+)
+```
+
+Nested paths are supported, including indexed list elements:
+
+```python
+updated = await db.update(
+    ComplexOrder,
+    hash_key="o1",
+    range_key=created_at,
+    update_expression={UpdateAttr("basket.items[1].qty").set(9)},
     return_values="ALL_NEW",
 )
 ```
@@ -261,6 +289,8 @@ Important arguments:
 - `filter_expression`: post-key filtering
 - `exclusive_start_key`: continue from a previous page
 - `consistent_read`: strongly consistent reads (where supported)
+- `projection_expression`: project selected attributes with `ProjectionAttr(...)`
+- `cast=False`: return raw Python dictionaries instead of model instances
 
 ### `create_table` / `delete_table`
 
@@ -309,13 +339,14 @@ await db.transact_write(
 Atomically read up to 100 items and get typed results back in request order:
 
 ```python
-from aiodynamodb import TransactGet
+from aiodynamodb import ProjectionAttr, TransactGet
 
 items = await db.transact_get(
     [
-        TransactGet(User, hash_key="u1"),
+        TransactGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id")]),
         TransactGet(User, hash_key="u2"),
-    ]
+    ],
+    cast=False,
 )
 ```
 
@@ -340,13 +371,14 @@ print(result.unprocessed_items)
 Read multiple items in one request (up to 100 keys per call):
 
 ```python
-from aiodynamodb import BatchGet
+from aiodynamodb import BatchGet, ProjectionAttr
 
 result = await db.batch_get(
     [
-        BatchGet(User, hash_key="u1"),
+        BatchGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id")]),
         BatchGet(User, hash_key="u2"),
-    ]
+    ],
+    cast=False,
 )
 print(result.items[User])
 print(result.unprocessed_keys)
@@ -380,7 +412,7 @@ with pytest.raises(ex.ConditionalCheckFailedException):
 make test
 ```
 
-This project uses `pytest`, `pytest-asyncio`, and `aiomoto` for mocked AWS tests.
+This project uses `pytest`, `pytest-asyncio`, `coverage`, and `aiomoto` for mocked AWS tests.
 
 ## Project Status
 
