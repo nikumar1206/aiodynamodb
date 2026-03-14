@@ -1,6 +1,7 @@
 [project]
 authors = [
   {name = "Nikhil Kumar", email = "nikumar1206@gmail.com"},
+  {name = "Alberto Calderari", email = "actwitter19@gmail.com"},
 ]
 
 dependencies = [

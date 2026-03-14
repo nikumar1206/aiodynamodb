@@ -1,18 +1,9 @@
-from aiodynamodb import DynamoDB, DynamoModel, table
 
+import pytest
+from boto3.dynamodb.conditions import Attr
 
-@table("users", hash_key="user_id")
-class User(DynamoModel):
-    user_id: str
-    name: str
-    email: str | None = None
-
-
-@table("orders", hash_key="order_id", range_key="created_at")
-class Order(DynamoModel):
-    order_id: str
-    created_at: str
-    total: int
+from aiodynamodb import DynamoDB
+from tests.entities import Order, User
 
 
 async def test_put_and_get(users_table):
@@ -28,6 +19,21 @@ async def test_put_and_get(users_table):
         "name": "Alice",
         "email": "alice@example.com",
     }
+
+
+async def test_put_with_condition(users_table):
+    db = DynamoDB()
+
+    user = User(user_id="u1", name="Alice", email="alice@example.com")
+    ex = await db.exceptions
+    with pytest.raises(ex.ConditionalCheckFailedException):
+        await db.put(user, condition_expression=Attr("user_id").exists())
+
+    fetched = await db.get(User, hash_key="u1")
+    assert fetched is None
+    await db.put(user, condition_expression=Attr("user_id").not_exists())
+    fetched = await db.get(User, hash_key="u1")
+    assert fetched == User(user_id="u1", name="Alice", email="alice@example.com")
 
 
 async def test_get_nonexistent(users_table):

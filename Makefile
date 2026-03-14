@@ -8,8 +8,12 @@ upgrade: ## Upgrade dependencies
 	uv sync --upgrade
 
 .PHONY: test
-test: ## Run tests
+test: install-dev lint## Run tests
 	uv run pytest
+
+.PHONY: lint
+lint: ## Lint
+	uv run ruff check src tests --fix
 
 .PHONY: build
 build: test ## Run tests and build the package
