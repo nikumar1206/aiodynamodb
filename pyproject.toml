@@ -1,12 +1,14 @@
 [project]
 authors = [
   {name = "Nikhil Kumar", email = "nikumar1206@gmail.com"},
+  {name = "Alberto Calderari", email = "actwitter19@gmail.com"},
 ]
 
 dependencies = [
   "aioboto3>=13.0.0",
   "aiobotocore>=2.13.0",
   "pydantic>=2.7.0",
+  "types-aioboto3[dynamodb]>=15.5.0",
 ]
 
 description = "Async DynamoDB ORM with Pydantic"
@@ -17,6 +19,8 @@ version = "0.1.2"
 
 [project.optional-dependencies]
 dev = [
+  "coverage[toml]>=7.10.6",
+  "pytest-cov",
   "pytest>=9.0.2",
   "pytest-asyncio>=1.3.0",
   "ruff>=0.14.14",
@@ -43,3 +47,12 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
 asyncio_default_fixture_loop_scope = "function"
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/aiodynamodb"]
+command_line = "-m pytest"
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

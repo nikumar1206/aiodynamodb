@@ -1,0 +1,28 @@
+
+.PHONY: install-dev
+install-dev: ## Install development dependencies
+	uv sync --locked --all-extras
+
+.PHONY: upgrade
+upgrade: ## Upgrade dependencies
+	uv sync --upgrade  --all-extras
+
+.PHONY: test
+test: install-dev lint## Run tests
+	uv run coverage run
+	uv run coverage report
+
+
+.PHONY: lint
+lint: ## Lint
+	uv run ruff check --fix
+	uv run ruff format src tests
+	uv run ruff format src tests --diff
+
+.PHONY: build
+build: test ## Run tests and build the package
+	uv build
+
+.PHONY: help
+help: ## Show all available commands
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
