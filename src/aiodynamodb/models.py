@@ -14,7 +14,7 @@ from types_aiobotocore_dynamodb.type_defs import (
     WriteRequestOutputTypeDef,
 )
 
-from aiodynamodb._serializers import DESERIALIZER, SERIALIZER, _to_dynamo_compatible
+from aiodynamodb._serializers import DESERIALIZER, SERIALIZER, _model_has_float_fields, _to_dynamo_compatible
 from aiodynamodb.custom_types import KeyT
 from aiodynamodb.projection import ProjectionExpressionArg
 from aiodynamodb.updates import UpdateAttr
@@ -107,6 +107,8 @@ class DynamoModel(BaseModel):
     """Base for models decorated with @table."""
 
     Meta: ClassVar[TableMeta]
+    # we can skip traversing model for converting Decimal -> float at runtime if it doesn't have floats.
+    _has_float_fields: ClassVar[bool] = False
 
     def to_dynamo(self) -> dict[str, Any]:
         """Serialize model fields to DynamoDB AttributeValue objects."""
@@ -116,6 +118,8 @@ class DynamoModel(BaseModel):
     def to_dynamo_compatible(self) -> dict[str, Any]:
         """Serialize model fields to DynamoDB AttributeValue objects."""
         dumped = self.model_dump(mode="json")
+        if not type(self)._has_float_fields:
+            return dumped
         return cast(dict[str, Any], _to_dynamo_compatible(dumped))
 
     @classmethod
@@ -153,6 +157,7 @@ def table(name: str, hash_key: str, range_key: str | None = None, indexes: list[
             global_secondary_indexes={i.name: i for i in idxs if isinstance(i, GSI)},
             local_secondary_indexes={i.name: i for i in idxs if isinstance(i, LSI)},
         )
+        cls._has_float_fields = _model_has_float_fields(cls)
         return cls
 
     def _validate_index_names(_indexes: list[LSI | GSI], index_type: type[GSI | LSI]):
