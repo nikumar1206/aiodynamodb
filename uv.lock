@@ -40,7 +40,6 @@ boto3 = [
 
 [[package]]
 name = "aiodynamodb"
-version = "0.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aioboto3" },
