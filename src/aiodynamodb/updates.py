@@ -1,13 +1,51 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, Self
 
 from boto3.dynamodb.conditions import AttributeBase
 from pydantic import BaseModel
 
 from aiodynamodb.conditions import CustomConditionExpressionBuilder
+
+
+class Action(Enum):
+    SET = "SET"
+    REMOVE = "REMOVE"
+    ADD = "ADD"
+    DELETE = "DELETE"
+
+
+class UpdateAttr(AttributeBase):
+    """DynamoDB update attribute path.
+
+    This inherits from boto3 ``AttributeBase`` so placeholder handling can reuse
+    the same builder machinery as condition expressions.
+    """
+
+    type: Action
+    value: Any
+
+    def set(self, value: Any) -> Self:
+        self.value = value
+        self.type = Action.SET
+        return self
+
+    def remove(self) -> Self:
+        self.type = Action.REMOVE
+        return self
+
+    def add(self, value: Any) -> Self:
+        self.value = value
+        self.type = Action.ADD
+        return self
+
+    def delete(self, value: Any) -> Self:
+        self.value = value
+        self.type = Action.DELETE
+        return self
+
+    def __hash__(self) -> int:
+        return hash((self.type, self.name, _freeze_hashable(getattr(self, "value", None))))
 
 
 @dataclass(frozen=True)
@@ -31,46 +69,6 @@ class _AddAction:
 class _DeleteAction:
     attribute: UpdateAttr
     value: Any
-
-
-class Action(Enum):
-    SET = "SET"
-    REMOVE = "REMOVE"
-    ADD = "ADD"
-    DELETE = "DELETE"
-
-
-class UpdateAttr(AttributeBase):
-    """DynamoDB update attribute path.
-
-    This inherits from boto3 ``AttributeBase`` so placeholder handling can reuse
-    the same builder machinery as condition expressions.
-    """
-
-    type: Action
-    value: Any
-
-    def set(self, value: Any) -> UpdateAttr:
-        self.value = value
-        self.type = Action.SET
-        return self
-
-    def remove(self) -> UpdateAttr:
-        self.type = Action.REMOVE
-        return self
-
-    def add(self, value: Any) -> UpdateAttr:
-        self.value = value
-        self.type = Action.ADD
-        return self
-
-    def delete(self, value: Any) -> UpdateAttr:
-        self.value = value
-        self.type = Action.DELETE
-        return self
-
-    def __hash__(self) -> int:
-        return hash((self.type, self.name, _freeze_hashable(getattr(self, "value", None))))
 
 
 def _freeze_hashable(value: Any) -> Any:

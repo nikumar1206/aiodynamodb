@@ -1,15 +1,15 @@
-from __future__ import annotations
-
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, assert_never
+from typing import Any, assert_never
 
 import aioboto3
+from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 from types_aiobotocore_dynamodb import DynamoDBServiceResource
-from types_aiobotocore_dynamodb.client import Exceptions
+from types_aiobotocore_dynamodb.client import DynamoDBClient, Exceptions
 from types_aiobotocore_dynamodb.literals import BillingModeType, TableClassType
+from types_aiobotocore_dynamodb.service_resource import Table
 from types_aiobotocore_dynamodb.type_defs import (
     AttributeDefinitionTypeDef,
     CreateGlobalTableInputTypeDef,
@@ -21,32 +21,6 @@ from types_aiobotocore_dynamodb.type_defs import (
     TableAttributeValueTypeDef,
 )
 
-from aiodynamodb._util import (
-    _add_filter_expressions,
-    _condition_expressions,
-    _key_condition_expressions,
-    _projection_expression,
-)
-from aiodynamodb.models import (
-    BatchDelete,
-    BatchGet,
-    BatchGetResult,
-    BatchPut,
-    BatchWriteResult,
-    Raw,
-    TransactConditionCheck,
-    TransactDelete,
-    TransactGet,
-    TransactPut,
-    TransactUpdate,
-)
-
-if TYPE_CHECKING:
-    from types_aiobotocore_dynamodb.client import DynamoDBClient
-    from types_aiobotocore_dynamodb.service_resource import Table
-
-from boto3.dynamodb.conditions import Attr, ConditionBase, Key
-
 from aiodynamodb._serializers import (
     DESERIALIZER,
     SERIALIZER,
@@ -54,9 +28,29 @@ from aiodynamodb._serializers import (
     _serialize_custom_attribute,
     _to_dynamo_compatible,
 )
+from aiodynamodb._util import (
+    _add_filter_expressions,
+    _condition_expressions,
+    _key_condition_expressions,
+    _projection_expression,
+)
 from aiodynamodb.conditions import CustomConditionExpressionBuilder
 from aiodynamodb.custom_types import KeyT, Timestamp, TimestampMicros, TimestampMillis, TimestampNanos
-from aiodynamodb.models import DynamoModel, QueryResult
+from aiodynamodb.models import (
+    BatchDelete,
+    BatchGet,
+    BatchGetResult,
+    BatchPut,
+    BatchWriteResult,
+    DynamoModel,
+    QueryResult,
+    Raw,
+    TransactConditionCheck,
+    TransactDelete,
+    TransactGet,
+    TransactPut,
+    TransactUpdate,
+)
 from aiodynamodb.projection import ProjectionExpressionArg
 from aiodynamodb.updates import UpdateAttr, UpdateExpressionBuilder
 
@@ -149,7 +143,7 @@ class DynamoDB:
 
     async def exceptions(self):
         """Return the boto3 DynamoDB exception namespace for error handling."""
-        if not hasattr(self, "_exceptions"):
+        if self._exceptions is None:
             client: DynamoDBClient
             async with self._session.client("dynamodb") as client:
                 self._exceptions: Exceptions = client.exceptions

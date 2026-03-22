@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 from decimal import Decimal
 from typing import Any, get_args, get_origin
