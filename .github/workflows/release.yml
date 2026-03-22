@@ -1,10 +1,9 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: ["Test"]
-    types: [completed]
-    branches: [main, release/**, release]
+  pull_request:
+    types: [closed]
+    branches: [main, release/**]
 
 permissions:
   contents: write
@@ -13,10 +12,10 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
     environment:
       name: pypi
       url: https://pypi.org/p/aiodynamodb
-    if: github.event.workflow_run.conclusion == 'success'
 
     steps:
       - uses: actions/checkout@v4
@@ -36,45 +35,40 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Determine version from git
+      - name: Compute next version
         id: version
         run: |
-          # Get last tag or default to 0.0.0
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          LAST_VERSION=${LAST_TAG#v}
+          LAST_VERSION="${LAST_TAG#v}"
 
-          IS_RELEASE_BRANCH=$([[ "${{ github.ref }}" == refs/heads/release/* ]] && echo "true" || echo "false")
-
-          if [ "$IS_RELEASE_BRANCH" = "true" ]; then
-            # On release branch: handle RC versioning
-            if [[ $LAST_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.rc\.([0-9]+)$ ]]; then
-              # Current version is already RC: bump RC number
-              MAJOR="${BASH_REMATCH[1]}"
-              MINOR="${BASH_REMATCH[2]}"
-              PATCH="${BASH_REMATCH[3]}"
-              RC_NUM="${BASH_REMATCH[4]}"
-              NEW_RC_NUM=$((RC_NUM + 1))
-              NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}.rc.${NEW_RC_NUM}"
+          if [[ "${{ github.base_ref }}" == release/* ]]; then
+            # On a release branch: publish an RC
+            if [[ "$LAST_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)rc([0-9]+)$ ]]; then
+              # Already an RC: bump the RC number
+              NEW_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}rc$((BASH_REMATCH[4] + 1))"
             else
-              # Current version is a release: bump patch and start RC.1
+              # Previous tag was a stable release: start rc1 for the next patch
               IFS='.' read -r MAJOR MINOR PATCH <<< "$LAST_VERSION"
-              NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1)).rc.1"
+              NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))rc1"
             fi
             RELEASE_TYPE="prerelease"
           else
-            # On main: increment patch version
+            # On main: publish a stable release
             IFS='.' read -r MAJOR MINOR PATCH <<< "$LAST_VERSION"
             NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
             RELEASE_TYPE="release"
           fi
 
-          echo "last_version=$LAST_VERSION" >> $GITHUB_OUTPUT
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
 
-      - name: Update version in pyproject.toml for build
+      - name: Update version in pyproject.toml
         run: |
-          sed -i 's/^version = .*/version = "${{ steps.version.outputs.new_version }}"/' pyproject.toml
+          sed -i 's/^version = .*/version = "${{ steps.version.outputs.version }}"/' pyproject.toml
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: bump version to ${{ steps.version.outputs.version }}"
+          git push
 
       - name: Build distribution
         run: uv build
@@ -87,30 +81,28 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$LAST_TAG" ]; then
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${GITHUB_REF_NAME}$" | head -1)
+          if [ -z "$PREV_TAG" ]; then
             CHANGELOG=$(git log --pretty=format:"- %h %s" HEAD)
           else
-            CHANGELOG=$(git log --pretty=format:"- %h %s" ${LAST_TAG}..HEAD)
+            CHANGELOG=$(git log --pretty=format:"- %h %s" ${PREV_TAG}..HEAD)
           fi
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create Git tag and GitHub Release
+      - name: Create Git tag
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "v${{ steps.version.outputs.new_version }}"
-          git push origin "v${{ steps.version.outputs.new_version }}"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.version.outputs.new_version }}
+          tag_name: v${{ steps.version.outputs.version }}
           prerelease: ${{ steps.version.outputs.release_type == 'prerelease' }}
           body: |
-            ## Version ${{ steps.version.outputs.new_version }}
+            ## Version ${{ steps.version.outputs.version }}
 
             ### Changes
             ${{ steps.changelog.outputs.changelog }}

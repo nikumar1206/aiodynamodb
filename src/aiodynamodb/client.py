@@ -25,7 +25,6 @@ from types_aiobotocore_dynamodb.type_defs import (
 )
 
 from aiodynamodb._serializers import (
-    DESERIALIZER,
     SERIALIZER,
     _resolve_key_annotation,
     _serialize_custom_attribute,

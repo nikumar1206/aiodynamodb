@@ -3,7 +3,6 @@ from datetime import datetime
 from boto3.dynamodb.conditions import Attr, Key
 from pydantic_core import TzInfo
 
-from aiodynamodb import ProjectionAttr
 from tests.entities import Basket, ComplexOrder, Item, Order
 
 
