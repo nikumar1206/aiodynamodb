@@ -71,7 +71,6 @@ async def test_transact_get_parses_models_and_serializes_custom_keys(dynamo_reso
                 ComplexOrder,
                 hash_key="o1",
                 range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
-                consistent_read=True,
             ),
             TransactGet(User, hash_key="missing"),
         ],

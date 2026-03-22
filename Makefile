@@ -19,6 +19,10 @@ lint: ## Lint
 	uv run ruff format src tests
 	uv run ruff format src tests --diff
 
+.PHONY: typecheck
+typecheck: ## Run mypy type checks
+	uv run mypy src
+
 .PHONY: build
 build: test ## Run tests and build the package
 	uv build

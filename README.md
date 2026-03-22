@@ -274,7 +274,7 @@ async for page in db.query(
     Order,
     key_condition_expression=Key("order_id").eq("o1"),
     limit=25,
-    scan_index_forward=False,
+    scan_index_forward=True,
 ):
     for item in page.items:
         print(item)

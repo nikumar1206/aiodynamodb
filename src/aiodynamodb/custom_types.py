@@ -16,7 +16,7 @@ type JSONStr[T: BaseModel] = Annotated[
     BeforeValidator(lambda v: json.loads(v) if isinstance(v, str) else v),
 ]
 
-type KeyT[T] = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime
+type KeyT = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime
 
 
 __all__ = ("Timestamp", "TimestampMillis", "TimestampMicros", "TimestampNanos", "JSONStr", "KeyT")

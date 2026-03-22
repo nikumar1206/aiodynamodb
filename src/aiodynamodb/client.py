@@ -297,7 +297,7 @@ class DynamoDB:
         exclusive_start_key: dict[str, TableAttributeValueTypeDef] | None = None,
         return_consumed_capacity=False,
         consistent_read: bool = False,
-        scan_index_forward=False,
+        scan_index_forward=True,
         projection_expression: ProjectionExpressionArg | None = None,
         cast: bool = True,
     ) -> AsyncIterator[QueryResult[T]]:

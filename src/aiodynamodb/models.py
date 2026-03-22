@@ -173,22 +173,17 @@ class QueryResult[T: DynamoModel]:
     last_evaluated_key: dict[str, Any] | None
 
 
-@dataclass
-class Page[T]:
-    """Represents one page of results from a paginated DynamoDB operation."""
-
-    items: list[T]
-    last_evaluated_key: dict | None = None
-
-
 @dataclass(frozen=True)
 class TransactGet[T: DynamoModel]:
-    """Single item read request used by ``transact_get``."""
+    """Single item read request used by ``transact_get``.
+
+    Note: ``transact_get_items`` is always strongly consistent — there is no
+    per-item consistency setting in the DynamoDB API.
+    """
 
     model: type[T]
     hash_key: KeyT
     range_key: KeyT | None = None
-    consistent_read: bool = False
     projection_expression: ProjectionExpressionArg | None = None
 
 
