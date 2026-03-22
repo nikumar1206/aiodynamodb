@@ -9,9 +9,7 @@ from aiodynamodb.custom_types import Timestamp
 from tests.entities import Basket, ComplexOrder, Item, User
 
 
-async def test_update_supports_high_level_update_expression(users_table):
-    db = users_table
-
+async def test_update_supports_high_level_update_expression(db):
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 
     updated = await db.update(
@@ -24,13 +22,12 @@ async def test_update_supports_high_level_update_expression(users_table):
     assert updated == User(user_id="u1", name="Bob", email="alice@example.com")
 
 
-async def test_update_serializes_timestamp_fields(dynamo_resource):
+async def test_update_serializes_timestamp_fields(db):
     @table("update_events", hash_key="event_id")
     class Event(DynamoModel):
         event_id: str
         processed_at: Timestamp | None = None
 
-    db = dynamo_resource
     await db.create_table(Event)
     await db.put(Event(event_id="e1"))
 
@@ -45,18 +42,10 @@ async def test_update_serializes_timestamp_fields(dynamo_resource):
     assert updated == Event(event_id="e1", processed_at=ts)
 
 
-async def test_update_supports_nested_field_paths(complex_order_table):
-    db = complex_order_table
+async def test_update_supports_nested_field_paths(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
     created_at = datetime(2020, 1, 1, tzinfo=TzInfo(0))
-    await db.put(
-        ComplexOrder(
-            order_id="o1",
-            created_at=created_at,
-            total=100,
-            basket=basket,
-        )
-    )
+    await db.put(ComplexOrder(order_id="o1", created_at=created_at, total=100, basket=basket))
 
     updated = await db.update(
         ComplexOrder,
@@ -70,13 +59,12 @@ async def test_update_supports_nested_field_paths(complex_order_table):
     assert updated.basket.items[0].qty == 7
 
 
-async def test_update_supports_atomic_counter_increment(dynamo_resource):
+async def test_update_supports_atomic_counter_increment(db):
     @table("counter_values", hash_key="counter_id")
     class Counter(DynamoModel):
         counter_id: str
         value: int = 0
 
-    db = dynamo_resource
     await db.create_table(Counter)
     await db.put(Counter(counter_id="c1", value=0))
 
@@ -97,18 +85,10 @@ async def test_update_supports_atomic_counter_increment(dynamo_resource):
     assert second == Counter(counter_id="c1", value=5)
 
 
-async def test_update_supports_specific_indexed_list_element(complex_order_table):
-    db = complex_order_table
+async def test_update_supports_specific_indexed_list_element(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo"), Item(qty=2, price=5.5, name="bar")])
     created_at = datetime(2020, 1, 1, tzinfo=TzInfo(0))
-    await db.put(
-        ComplexOrder(
-            order_id="o1",
-            created_at=created_at,
-            total=100,
-            basket=basket,
-        )
-    )
+    await db.put(ComplexOrder(order_id="o1", created_at=created_at, total=100, basket=basket))
 
     updated = await db.update(
         ComplexOrder,
@@ -123,9 +103,7 @@ async def test_update_supports_specific_indexed_list_element(complex_order_table
     assert updated.basket.items[1].qty == 9
 
 
-async def test_update_returns_model_instance(users_table):
-    db = users_table
-
+async def test_update_returns_model_instance(db):
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 
     updated = await db.update(
@@ -138,9 +116,7 @@ async def test_update_returns_model_instance(users_table):
     assert updated == User(user_id="u1", name="Bob", email="alice@example.com")
 
 
-async def test_update_returns_none_without_return_values(users_table):
-    db = users_table
-
+async def test_update_returns_none_without_return_values(db):
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 
     updated = await db.update(
@@ -152,7 +128,7 @@ async def test_update_returns_none_without_return_values(users_table):
     assert updated is None
 
 
-async def test_update_supports_remove_add_and_delete_actions(dynamo_resource):
+async def test_update_supports_remove_add_and_delete_actions(db):
     @table("counter_users", hash_key="user_id")
     class CounterUser(DynamoModel):
         user_id: str
@@ -160,7 +136,6 @@ async def test_update_supports_remove_add_and_delete_actions(dynamo_resource):
         tags: set[str] | None = None
         email: str | None = None
 
-    db = dynamo_resource
     await db.create_table(CounterUser)
     await db.put(CounterUser(user_id="u1", score=1, email="alice@example.com"))
 
@@ -180,9 +155,7 @@ async def test_update_supports_remove_add_and_delete_actions(dynamo_resource):
         await db.update(
             CounterUser,
             hash_key="u1",
-            update_expression={
-                UpdateAttr("tags").add({"a", "b"}),
-            },
+            update_expression={UpdateAttr("tags").add({"a", "b"})},
             return_values="ALL_NEW",
         )
 
@@ -190,8 +163,6 @@ async def test_update_supports_remove_add_and_delete_actions(dynamo_resource):
         await db.update(
             CounterUser,
             hash_key="u1",
-            update_expression={
-                UpdateAttr("tags").delete({"b"}),
-            },
+            update_expression={UpdateAttr("tags").delete({"b"})},
             return_values="ALL_NEW",
         )

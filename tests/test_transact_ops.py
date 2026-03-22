@@ -20,9 +20,7 @@ from aiodynamodb.custom_types import Timestamp
 from tests.entities import Basket, ComplexOrder, Item, User
 
 
-async def test_transact_write_applies_put_delete_and_condition(users_table):
-    db = users_table
-
+async def test_transact_write_applies_put_delete_and_condition(db):
     await db.put(User(user_id="u1", name="Alice"))
     await db.put(User(user_id="u2", name="Bob"))
 
@@ -42,17 +40,12 @@ async def test_transact_write_applies_put_delete_and_condition(users_table):
     assert await db.get(User, hash_key="u3") == User(user_id="u3", name="Carol", email=None)
 
 
-async def test_transact_write_condition_check_requires_expression(dynamo_resource):
-    db = dynamo_resource
+async def test_transact_write_condition_check_requires_expression(db):
     with pytest.raises(TypeError):
         await db.transact_write([TransactConditionCheck(User, hash_key="u1")])
 
 
-async def test_transact_get_parses_models_and_serializes_custom_keys(dynamo_resource):
-    db = dynamo_resource
-    await db.create_table(User)
-    await db.create_table(ComplexOrder)
-
+async def test_transact_get_parses_models_and_serializes_custom_keys(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
     await db.put(
@@ -67,11 +60,7 @@ async def test_transact_get_parses_models_and_serializes_custom_keys(dynamo_reso
     results = await db.transact_get(
         [
             TransactGet(User, hash_key="u1"),
-            TransactGet(
-                ComplexOrder,
-                hash_key="o1",
-                range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
-            ),
+            TransactGet(ComplexOrder, hash_key="o1", range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0))),
             TransactGet(User, hash_key="missing"),
         ],
         return_consumed_capacity=True,
@@ -89,9 +78,7 @@ async def test_transact_get_parses_models_and_serializes_custom_keys(dynamo_reso
     ]
 
 
-async def test_transact_get_accepts_projection_expression(dynamo_resource):
-    db: DynamoDB = dynamo_resource
-    await db.create_table(User)
+async def test_transact_get_accepts_projection_expression(db: DynamoDB):
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 
     results = await db.transact_get([
@@ -108,17 +95,9 @@ async def test_transact_get_accepts_projection_expression(dynamo_resource):
     assert user_1.name == "Alice"
 
 
-async def test_transact_write_supports_update_operation(complex_order_table):
-    db = complex_order_table
+async def test_transact_write_supports_update_operation(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
-    await db.put(
-        ComplexOrder(
-            order_id="o1",
-            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
-            total=100,
-            basket=basket,
-        )
-    )
+    await db.put(ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)), total=100, basket=basket))
 
     await db.transact_write([
         TransactUpdate(
@@ -130,22 +109,17 @@ async def test_transact_write_supports_update_operation(complex_order_table):
         )
     ])
 
-    updated = await db.get(
-        ComplexOrder,
-        hash_key="o1",
-        range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
-    )
+    updated = await db.get(ComplexOrder, hash_key="o1", range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)))
     assert updated is not None
     assert updated.total == 250
 
 
-async def test_transact_write_update_serializes_timestamp_fields(dynamo_resource):
+async def test_transact_write_update_serializes_timestamp_fields(db):
     @table("transact_update_events", hash_key="event_id")
     class Event(DynamoModel):
         event_id: str
         processed_at: Timestamp | None = None
 
-    db = dynamo_resource
     await db.create_table(Event)
     await db.put(Event(event_id="e1"))
 
@@ -162,18 +136,10 @@ async def test_transact_write_update_serializes_timestamp_fields(dynamo_resource
     assert updated == Event(event_id="e1", processed_at=ts)
 
 
-async def test_transact_write_update_supports_nested_field_paths(complex_order_table):
-    db = complex_order_table
+async def test_transact_write_update_supports_nested_field_paths(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
     created_at = datetime(2020, 1, 1, tzinfo=TzInfo(0))
-    await db.put(
-        ComplexOrder(
-            order_id="o1",
-            created_at=created_at,
-            total=100,
-            basket=basket,
-        )
-    )
+    await db.put(ComplexOrder(order_id="o1", created_at=created_at, total=100, basket=basket))
 
     await db.transact_write([
         TransactUpdate(
