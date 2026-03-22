@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, assert_never
 
 import aioboto3
 from types_aiobotocore_dynamodb import DynamoDBServiceResource
+from types_aiobotocore_dynamodb.client import Exceptions
 from types_aiobotocore_dynamodb.literals import BillingModeType, TableClassType
 from types_aiobotocore_dynamodb.type_defs import (
     AttributeDefinitionTypeDef,
@@ -144,13 +145,14 @@ class DynamoDB:
         """
         self._session = session or aioboto3.Session()
         self.hask_key_types = hask_key_types
+        self._exceptions: Exceptions | None = None  # type: ignore
 
     async def exceptions(self):
         """Return the boto3 DynamoDB exception namespace for error handling."""
         if not hasattr(self, "_exceptions"):
             client: DynamoDBClient
             async with self._session.client("dynamodb") as client:
-                self._exceptions = client.exceptions
+                self._exceptions: Exceptions = client.exceptions
         return self._exceptions
 
     async def put(self, item: DynamoModel, *, condition_expression: ConditionBase | None = None) -> None:
