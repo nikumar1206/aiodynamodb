@@ -1,7 +1,8 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Literal, assert_never, cast
+from typing import Any, Literal, Self, assert_never, cast
 
 import aioboto3
 from boto3.dynamodb.conditions import ConditionBase
@@ -125,12 +126,64 @@ class DynamoDB:
         self._session = session or aioboto3.Session()
         self.hash_key_types = hash_key_types
         self._exceptions: Exceptions | None = None
+        self._held_resource: DynamoDBServiceResource | None = None
+        self._held_client: DynamoDBClient | None = None
+        self._resource_ctx: Any = None
+        self._client_ctx: Any = None
+        self._resource_lock: asyncio.Lock = asyncio.Lock()
+        self._client_lock: asyncio.Lock = asyncio.Lock()
+        self._table_cache: dict[str, Table] = {}
+
+    async def __aenter__(self) -> Self:
+        await self._ensure_resource()
+        await self._ensure_client()
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        await self.close()
+
+    async def close(self) -> None:
+        """Release held connections. Call when done if not using as a context manager."""
+        self._table_cache.clear()
+        if self._resource_ctx is not None:
+            await self._resource_ctx.__aexit__(None, None, None)
+            self._held_resource = None
+            self._resource_ctx = None
+        if self._client_ctx is not None:
+            await self._client_ctx.__aexit__(None, None, None)
+            self._held_client = None
+            self._client_ctx = None
+
+    async def _table(self, table_name: str) -> Table:
+        if table_name not in self._table_cache:
+            resource = await self._ensure_resource()
+            self._table_cache[table_name] = await resource.Table(table_name)
+        return self._table_cache[table_name]
+
+    async def _ensure_resource(self) -> DynamoDBServiceResource:
+        if self._held_resource is not None:
+            return self._held_resource
+        async with self._resource_lock:
+            if self._held_resource is None:
+                self._resource_ctx = self._session.resource("dynamodb")
+                self._held_resource = await self._resource_ctx.__aenter__()
+        assert self._held_resource is not None
+        return self._held_resource
+
+    async def _ensure_client(self) -> DynamoDBClient:
+        if self._held_client is not None:
+            return self._held_client
+        async with self._client_lock:
+            if self._held_client is None:
+                self._client_ctx = self._session.client("dynamodb")
+                self._held_client = await self._client_ctx.__aenter__()
+        assert self._held_client is not None
+        return self._held_client
 
     async def exceptions(self):
         """Return the boto3 DynamoDB exception namespace for error handling."""
         if self._exceptions is None:
-            client: DynamoDBClient
-            async with self._session.client("dynamodb") as client:
+            async with self._client() as client:
                 self._exceptions = client.exceptions
         return self._exceptions
 
@@ -143,9 +196,8 @@ class DynamoDB:
                 writes.
         """
         args = _condition_expressions(type(item), condition_expression)
-        async with self._resource() as resource:
-            table: Table = await resource.Table(item.Meta.table_name)
-            await table.put_item(Item=item.to_dynamo_compatible(), **args)
+        table = await self._table(item.Meta.table_name)
+        await table.put_item(Item=item.to_dynamo_compatible(), **args)
 
     async def delete(self, item: DynamoModel, *, condition_expression: ConditionBase | None = None) -> None:
         """Delete an item from DynamoDB.
@@ -162,9 +214,8 @@ class DynamoDB:
             range_key=getattr(item, meta.range_key) if meta.range_key else None,
         )
         args = _condition_expressions(type(item), condition_expression)
-        async with self._resource() as resource:
-            table: Table = await resource.Table(meta.table_name)
-            await table.delete_item(Key=key, **args)
+        table = await self._table(meta.table_name)
+        await table.delete_item(Key=key, **args)
 
     async def update[T: DynamoModel](
         self,
@@ -214,9 +265,8 @@ class DynamoDB:
             built.expression_attribute_values
         )
 
-        async with self._resource() as resource:
-            table: Table = await resource.Table(model.Meta.table_name)
-            response = await table.update_item(**args)
+        table = await self._table(model.Meta.table_name)
+        response = await table.update_item(**args)
 
         item = response.get("Attributes")
         if not item:
@@ -257,12 +307,11 @@ class DynamoDB:
         }
         args.update(_projection_expression(model, projection_expression))
 
-        async with self._resource() as resource:
-            table: Table = await resource.Table(meta.table_name)
-            resp = await table.get_item(**args)
-            item = resp.get("Item")
-            if item is None:
-                return None
+        table = await self._table(meta.table_name)
+        resp = await table.get_item(**args)
+        item = resp.get("Item")
+        if item is None:
+            return None
         return _to_model(item, model)
 
     async def query[T: DynamoModel](
@@ -342,18 +391,17 @@ class DynamoDB:
         if return_consumed_capacity:
             query_args["ReturnConsumedCapacity"] = "TOTAL"
 
-        async with self._resource() as resource:
-            table: Table = await resource.Table(meta.table_name)
+        table = await self._table(meta.table_name)
 
-            while True:
-                page = await table.query(**query_args)
-                yield QueryResult(
-                    items=[_to_model(item, model) for item in page.get("Items", [])],
-                    last_evaluated_key=page.get("LastEvaluatedKey"),
-                )
-                if "LastEvaluatedKey" not in page:
-                    break
-                query_args["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+        while True:
+            page = await table.query(**query_args)
+            yield QueryResult(
+                items=[_to_model(item, model) for item in page.get("Items", [])],
+                last_evaluated_key=page.get("LastEvaluatedKey"),
+            )
+            if "LastEvaluatedKey" not in page:
+                break
+            query_args["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
     async def transact_get[T: DynamoModel](
         self, requests: list[TransactGet[T]], *, return_consumed_capacity=False
@@ -713,15 +761,11 @@ class DynamoDB:
 
     @asynccontextmanager
     async def _resource(self) -> AsyncIterator[DynamoDBServiceResource]:
-        resource: DynamoDBServiceResource
-        async with self._session.resource("dynamodb") as resource:
-            yield resource
+        yield await self._ensure_resource()
 
     @asynccontextmanager
     async def _client(self) -> AsyncIterator[DynamoDBClient]:
-        client: DynamoDBClient
-        async with self._session.client("dynamodb") as client:
-            yield client
+        yield await self._ensure_client()
 
 
 def _build_key(model: type[DynamoModel], *, hash_key: KeyT, range_key: KeyT | None = None) -> dict[str, Any]:

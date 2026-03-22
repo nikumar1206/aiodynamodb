@@ -8,6 +8,24 @@ from pydantic import BaseModel, TypeAdapter
 from aiodynamodb.custom_types import KeyT
 
 
+def _model_has_float_fields(model: type[BaseModel]) -> bool:
+    """Return True if any field in the model (recursively) has a float annotation.
+
+    Called once at @table decoration time and cached as a ClassVar so that
+    to_dynamo_compatible can skip the float→Decimal traversal for models
+    that never contain float values.
+    """
+    for field_info in model.model_fields.values():
+        ann = field_info.annotation
+        args = get_args(ann) if get_origin(ann) is not None else (ann,)
+        for arg in args:
+            if arg is float:
+                return True
+            if isinstance(arg, type) and issubclass(arg, BaseModel) and _model_has_float_fields(arg):
+                return True
+    return False
+
+
 def _resolve_key_annotation(annotation: Any) -> type:
     """Resolve optional/union annotations to a concrete key type."""
     origin = get_origin(annotation)
@@ -70,31 +88,39 @@ class DynamoDeserializer:
         return self._to_dynamo(value)
 
 
+_type_adapter_cache: dict[tuple[type[BaseModel], str], TypeAdapter[Any]] = {}
+
+
 def _serialize_custom_attribute(model: type[BaseModel], field_name: str, field_value: KeyT) -> str | int:
     """Function to correctly serialize custom types to the expected dynamo value.
 
     This is auto applied on hash and range key on get() but must be manually applied in query
     """
-    current_model = model
-    key_type: Any = None
-    fields = [part for part in field_name.split(".") if part]
+    cache_key = (model, field_name)
+    adapter = _type_adapter_cache.get(cache_key)
+    if adapter is None:
+        current_model = model
+        key_type: Any = None
+        fields = [part for part in field_name.split(".") if part]
 
-    for index, raw_field in enumerate(fields):
-        field = raw_field.split("[", 1)[0]
-        if field not in current_model.model_fields:
-            raise KeyError(f"Unknown field '{field}' in path '{field_name}' for model {current_model.__name__}")
-        key_type = _resolve_key_annotation(current_model.model_fields[field].annotation)
-        if index == len(fields) - 1:
-            break
-        nested_model = _extract_nested_model(key_type)
-        if nested_model is None:
-            raise TypeError(f"Field path '{field_name}' is not a nested model path")
-        current_model = nested_model
+        for index, raw_field in enumerate(fields):
+            field = raw_field.split("[", 1)[0]
+            if field not in current_model.model_fields:
+                raise KeyError(f"Unknown field '{field}' in path '{field_name}' for model {current_model.__name__}")
+            key_type = _resolve_key_annotation(current_model.model_fields[field].annotation)
+            if index == len(fields) - 1:
+                break
+            nested_model = _extract_nested_model(key_type)
+            if nested_model is None:
+                raise TypeError(f"Field path '{field_name}' is not a nested model path")
+            current_model = nested_model
 
-    if key_type is None:
-        raise ValueError(f"Invalid field path '{field_name}'")
-    serialized = TypeAdapter(key_type).serializer.to_python(field_value)
-    return cast(str | int, serialized)
+        if key_type is None:
+            raise ValueError(f"Invalid field path '{field_name}'")
+        adapter = TypeAdapter(key_type)
+        _type_adapter_cache[cache_key] = adapter
+
+    return cast(str | int, adapter.serializer.to_python(field_value))
 
 
 def _extract_nested_model(annotation: Any) -> type[BaseModel] | None:
