@@ -137,14 +137,14 @@ class DynamoDB:
     operations and returns validated model instances for reads/queries.
     """
 
-    def __init__(self, session: aioboto3.Session | None = None, hask_key_types: dict[Any, str] = _KEY_TO_TYPE):
+    def __init__(self, session: aioboto3.Session | None = None, hash_key_types: dict[Any, str] = _KEY_TO_TYPE):
         """Create a client instance.
 
         Args:
             session: Optional ``aioboto3`` session. If omitted, a new session is created.
         """
         self._session = session or aioboto3.Session()
-        self.hask_key_types = hask_key_types
+        self.hash_key_types = hash_key_types
         self._exceptions: Exceptions | None = None  # type: ignore
 
     async def exceptions(self):
@@ -665,12 +665,12 @@ class DynamoDB:
 
         def _add_attribute(field_name: str) -> None:
             annotation = _resolve_key_annotation(model.model_fields[field_name].annotation)
-            if annotation not in self.hask_key_types:
+            if annotation not in self.hash_key_types:
                 raise TypeError(
                     f"Unsupported key type for field '{field_name}': {annotation!r}. "
-                    f"Supported types are: {tuple(self.hask_key_types)}"
+                    f"Supported types are: {tuple(self.hash_key_types)}"
                 )
-            attribute_types[field_name] = self.hask_key_types[annotation]
+            attribute_types[field_name] = self.hash_key_types[annotation]
 
         _add_attribute(meta.hash_key)
         if meta.range_key:

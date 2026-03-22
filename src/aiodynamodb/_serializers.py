@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import typing
 from decimal import Decimal
 from typing import Any, get_args, get_origin
 
@@ -15,7 +16,7 @@ def _resolve_key_annotation(annotation: Any) -> type:
     if origin is None:
         return annotation
     # Preserve container types like ``set[str]`` while unwrapping Annotated metadata.
-    if str(origin) == "typing.Annotated":
+    if origin == typing.Annotated:
         args = get_args(annotation)
         if args:
             return _resolve_key_annotation(args[0])
@@ -120,7 +121,7 @@ def _extract_nested_model(annotation: Any) -> type[BaseModel] | None:
             return _extract_nested_model(args[1])
         return None
 
-    if str(origin) == "typing.Annotated":
+    if origin == typing.Annotated:
         args = get_args(resolved)
         if args:
             return _extract_nested_model(args[0])

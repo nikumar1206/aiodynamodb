@@ -1,12 +1,9 @@
 from __future__ import annotations
 
+import typing
 from typing import Any, get_args, get_origin
 
-from boto3.dynamodb.conditions import (
-    ATTR_NAME_REGEX,
-    AttributeBase,
-    ConditionExpressionBuilder,
-)
+from boto3.dynamodb.conditions import ATTR_NAME_REGEX, AttributeBase, ConditionExpressionBuilder
 from pydantic import BaseModel
 
 from aiodynamodb._serializers import _serialize_custom_attribute
@@ -143,7 +140,7 @@ class CustomConditionExpressionBuilder[T: BaseModel](ConditionExpressionBuilder)
                 return self._extract_nested_model(args[1])
             return None
 
-        if str(origin) == "typing.Annotated":
+        if origin == typing.Annotated:
             args = get_args(resolved)
             if args:
                 return self._extract_nested_model(args[0])
