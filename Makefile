@@ -8,7 +8,7 @@ upgrade: ## Upgrade dependencies
 	uv sync --upgrade  --all-extras
 
 .PHONY: test
-test: install-dev lint## Run tests
+test: install-dev lint typecheck ## Run tests
 	uv run coverage run
 	uv run coverage report
 

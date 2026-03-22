@@ -3,12 +3,12 @@ from datetime import datetime
 from boto3.dynamodb.conditions import Attr, Key
 from pydantic_core import TzInfo
 
-from aiodynamodb import DynamoDB, ProjectionAttr
+from aiodynamodb import ProjectionAttr
 from tests.entities import Basket, ComplexOrder, Item, Order
 
 
 async def test_query_returns_paginated_results(orders_table):
-    db = DynamoDB()
+    db = orders_table
 
     await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
     await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
@@ -35,7 +35,7 @@ async def test_query_returns_paginated_results(orders_table):
 
 
 async def test_query_supports_exclusive_start_key(orders_table):
-    db = DynamoDB()
+    db = orders_table
 
     await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
     await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
@@ -68,7 +68,7 @@ async def test_query_supports_exclusive_start_key(orders_table):
 
 
 async def test_query_applies_filter_expression(orders_table):
-    db = DynamoDB()
+    db = orders_table
 
     await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
     await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
@@ -87,7 +87,7 @@ async def test_query_applies_filter_expression(orders_table):
 
 
 async def test_query_index(orders_table):
-    db = DynamoDB()
+    db = orders_table
 
     await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
     await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
@@ -107,7 +107,7 @@ async def test_query_index(orders_table):
 
 
 async def test_query_lsi_index(orders_table):
-    db = DynamoDB()
+    db = orders_table
 
     await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
     await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
@@ -127,7 +127,7 @@ async def test_query_lsi_index(orders_table):
 
 
 async def test_complex_item(complex_order_table):
-    db = DynamoDB()
+    db = complex_order_table
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
     await db.put(
         ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)), total=100, basket=basket)
@@ -166,7 +166,7 @@ async def test_complex_item(complex_order_table):
 
 
 async def test_query_serializes_custom_key_condition_values(complex_order_table):
-    db = DynamoDB()
+    db = complex_order_table
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
 
     await db.put(
@@ -207,8 +207,8 @@ async def test_query_serializes_custom_key_condition_values(complex_order_table)
     assert [item.total for item in filtered] == [200, 300]
 
 
-async def test_query_can_return_raw_items(orders_table):
-    db = DynamoDB()
+async def test_query_returns_model_instances(orders_table):
+    db = orders_table
 
     await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
     await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
@@ -218,18 +218,17 @@ async def test_query_can_return_raw_items(orders_table):
         Order,
         key_condition_expression=Key("order_id").eq("o1"),
         scan_index_forward=True,
-        cast=False,
     ):
         pages.append(page)
 
-    assert [item["created_at"] for page in pages for item in page.items] == [
+    assert [item.created_at for page in pages for item in page.items] == [
         "2026-01-01",
         "2026-01-02",
     ]
 
 
 async def test_query_supports_projection_expression_with_filter(complex_order_table):
-    db = DynamoDB()
+    db = complex_order_table
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
 
     await db.put(
@@ -246,17 +245,15 @@ async def test_query_supports_projection_expression_with_filter(complex_order_ta
         ComplexOrder,
         key_condition_expression=Key("order_id").eq("o1"),
         filter_expression=Attr("basket.items.qty").eq(1),
-        projection_expression=[ProjectionAttr("order_id"), ProjectionAttr("basket.items.qty")],
-        cast=False,
     ):
         projected.extend(page.items)
 
     assert len(projected) == 1
-    assert projected[0]["order_id"] == "o1"
+    assert projected[0].order_id == "o1"
 
 
 async def test_deep_filter(complex_order_table):
-    db = DynamoDB()
+    db = complex_order_table
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
     basket2 = Basket(items=[Item(qty=2, price=10.9, name="foo")])
 

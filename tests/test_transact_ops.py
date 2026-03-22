@@ -42,8 +42,8 @@ async def test_transact_write_applies_put_delete_and_condition(users_table):
     assert await db.get(User, hash_key="u3") == User(user_id="u3", name="Carol", email=None)
 
 
-async def test_transact_write_condition_check_requires_expression():
-    db = DynamoDB()
+async def test_transact_write_condition_check_requires_expression(dynamo_resource):
+    db = dynamo_resource
     with pytest.raises(TypeError):
         await db.transact_write([TransactConditionCheck(User, hash_key="u1")])
 
@@ -90,24 +90,22 @@ async def test_transact_get_parses_models_and_serializes_custom_keys(dynamo_reso
 
 
 async def test_transact_get_accepts_projection_expression(dynamo_resource):
-    db = dynamo_resource
+    db: DynamoDB = dynamo_resource
     await db.create_table(User)
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 
-    results = await db.transact_get(
-        [
-            TransactGet(
-                User,
-                hash_key="u1",
-                projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("name")],
-            )
-        ],
-        cast=False,
-    )
+    results = await db.transact_get([
+        TransactGet(
+            User,
+            hash_key="u1",
+            projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("name")],
+        )
+    ])
 
-    assert results[0] is not None
-    assert results[0]["user_id"] == "u1"
-    assert results[0]["name"] == "Alice"
+    user_1 = results[0]
+    assert user_1 is not None
+    assert user_1.user_id == "u1"
+    assert user_1.name == "Alice"
 
 
 async def test_transact_write_supports_update_operation(complex_order_table):

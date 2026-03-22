@@ -4,12 +4,12 @@ import pytest
 from boto3.dynamodb.conditions import Attr
 from pydantic_core import TzInfo
 
-from aiodynamodb import DynamoDB, DynamoModel, ProjectionAttr, table
+from aiodynamodb import DynamoModel, ProjectionAttr, table
 from tests.entities import Basket, ComplexOrder, Item, Order, User
 
 
 async def test_put_and_get(users_table):
-    db = DynamoDB()
+    db = users_table
 
     user = User(user_id="u1", name="Alice", email="alice@example.com")
     await db.put(user)
@@ -24,7 +24,7 @@ async def test_put_and_get(users_table):
 
 
 async def test_put_with_condition(users_table):
-    db = DynamoDB()
+    db = users_table
 
     user = User(user_id="u1", name="Alice", email="alice@example.com")
     ex = await db.exceptions()
@@ -39,14 +39,14 @@ async def test_put_with_condition(users_table):
 
 
 async def test_get_nonexistent(users_table):
-    db = DynamoDB()
+    db = users_table
 
     fetched = await db.get(User, hash_key="does-not-exist")
     assert fetched is None
 
 
 async def test_put_overwrites(users_table):
-    db = DynamoDB()
+    db = users_table
 
     await db.put(User(user_id="u1", name="Alice"))
     await db.put(User(user_id="u1", name="Bob"))
@@ -61,7 +61,7 @@ async def test_put_overwrites(users_table):
 
 
 async def test_composite_key_put_and_get(orders_table):
-    db = DynamoDB()
+    db = orders_table
 
     order = Order(order_id="o1", created_at="2026-01-01T00:00:00", total=100)
     await db.put(order)
@@ -76,7 +76,7 @@ async def test_composite_key_put_and_get(orders_table):
 
 
 async def test_composite_key_different_range_keys(orders_table):
-    db = DynamoDB()
+    db = orders_table
 
     await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
     await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
@@ -99,7 +99,7 @@ async def test_composite_key_different_range_keys(orders_table):
 
 
 async def test_get_supports_projection_expression_model(users_table):
-    db = DynamoDB()
+    db = users_table
 
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 
@@ -107,32 +107,31 @@ async def test_get_supports_projection_expression_model(users_table):
         User,
         hash_key="u1",
         projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("name")],
-        cast=False,
     )
 
-    assert fetched == {
-        "user_id": "u1",
-        "name": "Alice",
-    }
+    # email not projected — model returned with email=None (its default)
+    assert fetched == User(user_id="u1", name="Alice")
 
 
 async def test_get_supports_projection_expression_single_field(users_table):
-    db = DynamoDB()
+    db = users_table
 
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 
+    # project all required fields so Pydantic validation succeeds
     fetched = await db.get(
         User,
         hash_key="u1",
-        projection_expression=[ProjectionAttr("user_id")],
-        cast=False,
+        projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("name")],
     )
 
-    assert fetched == {"user_id": "u1"}
+    assert fetched is not None
+    assert fetched.user_id == "u1"
+    assert fetched.email is None
 
 
 async def test_get_supports_specific_list_element(complex_order_table):
-    db = DynamoDB()
+    db = complex_order_table
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo"), Item(qty=2, price=5.5, name="bar")])
 
     created_at = datetime(2026, 1, 1, tzinfo=TzInfo(0))

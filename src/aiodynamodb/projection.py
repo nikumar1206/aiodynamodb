@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import cast
 
 from boto3.dynamodb.conditions import AttributeBase
 from pydantic import BaseModel
@@ -31,4 +32,4 @@ class ProjectionExpressionBuilder[T: BaseModel](CustomConditionExpressionBuilder
         )
 
     def _build_projection_part(self, attribute: ProjectionAttr, names: dict[str, str]) -> str:
-        return self._build_name_placeholder(attribute, names)
+        return cast(str, self._build_name_placeholder(attribute, names))

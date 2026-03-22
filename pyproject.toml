@@ -19,6 +19,7 @@ version = "0.1.2"
 
 [project.optional-dependencies]
 dev = [
+  "boto3-stubs[dynamodb]>=1.38.0",
   "coverage[toml]>=7.10.6",
   "mypy>=1.19",
   "pytest-cov",
@@ -58,3 +59,9 @@ source = ["src/aiodynamodb"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+
+[tool.mypy]
+check_untyped_defs = true
+python_version = "3.12"
+warn_return_any = false
+warn_unused_ignores = true
