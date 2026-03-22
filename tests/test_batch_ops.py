@@ -66,12 +66,10 @@ async def test_batch_get_rejects_conflicting_projection_for_same_table():
     db = DynamoDB()
 
     with pytest.raises(ValueError):
-        await db.batch_get(
-            [
-                BatchGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id")]),
-                BatchGet(User, hash_key="u2", projection_expression=[ProjectionAttr("name")]),
-            ]
-        )
+        await db.batch_get([
+            BatchGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id")]),
+            BatchGet(User, hash_key="u2", projection_expression=[ProjectionAttr("name")]),
+        ])
 
 
 async def test_batch_get_can_return_raw_items(dynamo_resource):

@@ -123,17 +123,15 @@ async def test_transact_write_supports_update_operation(complex_order_table):
         )
     )
 
-    await db.transact_write(
-        [
-            TransactUpdate(
-                ComplexOrder,
-                hash_key="o1",
-                range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
-                update_expression={UpdateAttr("total").set(250)},
-                condition_expression=Attr("total").gte(100),
-            )
-        ]
-    )
+    await db.transact_write([
+        TransactUpdate(
+            ComplexOrder,
+            hash_key="o1",
+            range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            update_expression={UpdateAttr("total").set(250)},
+            condition_expression=Attr("total").gte(100),
+        )
+    ])
 
     updated = await db.get(
         ComplexOrder,
@@ -155,15 +153,13 @@ async def test_transact_write_update_serializes_timestamp_fields(dynamo_resource
     await db.put(Event(event_id="e1"))
 
     ts = datetime(2020, 1, 1, tzinfo=TzInfo(0))
-    await db.transact_write(
-        [
-            TransactUpdate(
-                Event,
-                hash_key="e1",
-                update_expression={UpdateAttr("processed_at").set(ts)},
-            )
-        ]
-    )
+    await db.transact_write([
+        TransactUpdate(
+            Event,
+            hash_key="e1",
+            update_expression={UpdateAttr("processed_at").set(ts)},
+        )
+    ])
 
     updated = await db.get(Event, hash_key="e1")
     assert updated == Event(event_id="e1", processed_at=ts)
@@ -182,16 +178,14 @@ async def test_transact_write_update_supports_nested_field_paths(complex_order_t
         )
     )
 
-    await db.transact_write(
-        [
-            TransactUpdate(
-                ComplexOrder,
-                hash_key="o1",
-                range_key=created_at,
-                update_expression={UpdateAttr("basket.items.qty").set(8)},
-            )
-        ]
-    )
+    await db.transact_write([
+        TransactUpdate(
+            ComplexOrder,
+            hash_key="o1",
+            range_key=created_at,
+            update_expression={UpdateAttr("basket.items.qty").set(8)},
+        )
+    ])
 
     updated = await db.get(ComplexOrder, hash_key="o1", range_key=created_at)
     assert updated is not None
