@@ -4,7 +4,6 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from decimal import Decimal
-from functools import cached_property
 from typing import TYPE_CHECKING, Any, assert_never
 
 import aioboto3
@@ -146,14 +145,15 @@ class DynamoDB:
         self._session = session or aioboto3.Session()
         self.hask_key_types = hask_key_types
 
-    @cached_property
     async def exceptions(self):
         """Return the boto3 DynamoDB exception namespace for error handling."""
-        client: DynamoDBClient
-        async with self._session.client("dynamodb") as client:
-            return client.exceptions
+        if not hasattr(self, "_exceptions"):
+            client: DynamoDBClient
+            async with self._session.client("dynamodb") as client:
+                self._exceptions = client.exceptions
+        return self._exceptions
 
-    async def put[T: DynamoModel](self, item: T, *, condition_expression: ConditionBase = None) -> None:
+    async def put(self, item: DynamoModel, *, condition_expression: ConditionBase | None = None) -> None:
         """Insert or replace an item in DynamoDB.
 
         Args:
@@ -166,7 +166,7 @@ class DynamoDB:
             table: Table = await resource.Table(item.Meta.table_name)
             await table.put_item(Item=item.to_dynamo_compatible(), **args)
 
-    async def delete[T: DynamoModel](self, item: T, *, condition_expression: ConditionBase = None) -> None:
+    async def delete(self, item: DynamoModel, *, condition_expression: ConditionBase | None = None) -> None:
         """Delete an item from DynamoDB.
 
         Args:
@@ -174,10 +174,16 @@ class DynamoDB:
             condition_expression: Optional conditional expression that must match
                 for the delete to succeed.
         """
+        meta = type(item).Meta
+        key = _build_key(
+            type(item),
+            hash_key=getattr(item, meta.hash_key),
+            range_key=getattr(item, meta.range_key) if meta.range_key else None,
+        )
         args = _condition_expressions(type(item), condition_expression)
         async with self._resource() as resource:
-            table: Table = await resource.Table(item.Meta.table_name)
-            await table.delete_item(Item=item.to_dynamo_compatible(), **args)
+            table: Table = await resource.Table(meta.table_name)
+            await table.delete_item(Key=key, **args)
 
     async def update[T: DynamoModel](
         self,
@@ -604,13 +610,13 @@ class DynamoDB:
         for operation in operations:
             match operation:
                 case BatchPut(item=item) as p:
-                    request_items.setdefault(p.model.Meta.table_name, []).append(
-                        {"PutRequest": {"Item": item.to_dynamo()}}
-                    )
+                    request_items.setdefault(p.model.Meta.table_name, []).append({
+                        "PutRequest": {"Item": item.to_dynamo()}
+                    })
                 case BatchDelete(model=model, hash_key=hash_key, range_key=range_key):
-                    request_items.setdefault(model.Meta.table_name, []).append(
-                        {"DeleteRequest": {"Key": _build_dynamo_key(model, hash_key=hash_key, range_key=range_key)}}
-                    )
+                    request_items.setdefault(model.Meta.table_name, []).append({
+                        "DeleteRequest": {"Key": _build_dynamo_key(model, hash_key=hash_key, range_key=range_key)}
+                    })
                 case _ as impossible:
                     assert_never(impossible)
 

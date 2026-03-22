@@ -27,7 +27,7 @@ async def test_put_with_condition(users_table):
     db = DynamoDB()
 
     user = User(user_id="u1", name="Alice", email="alice@example.com")
-    ex = await db.exceptions
+    ex = await db.exceptions()
     with pytest.raises(ex.ConditionalCheckFailedException):
         await db.put(user, condition_expression=Attr("user_id").exists())
 
@@ -149,6 +149,49 @@ async def test_get_supports_specific_list_element(complex_order_table):
 
     assert fetched is not None
     assert fetched.basket.items[1].name == "bar"
+
+
+async def test_delete_removes_item(users_table):
+    db = users_table
+
+    await db.put(User(user_id="u1", name="Alice"))
+    assert await db.get(User, hash_key="u1") is not None
+
+    await db.delete(User(user_id="u1", name="Alice"))
+    assert await db.get(User, hash_key="u1") is None
+
+
+async def test_delete_composite_key(orders_table):
+    db = orders_table
+
+    order = Order(order_id="o1", created_at="2026-01-01", total=100)
+    await db.put(order)
+    assert await db.get(Order, hash_key="o1", range_key="2026-01-01") is not None
+
+    await db.delete(order)
+    assert await db.get(Order, hash_key="o1", range_key="2026-01-01") is None
+
+
+async def test_delete_nonexistent_item_is_noop(users_table):
+    db = users_table
+    # deleting a non-existent item should not raise
+    await db.delete(User(user_id="does-not-exist", name="Ghost"))
+
+
+async def test_delete_with_condition_expression(users_table):
+    db = users_table
+
+    await db.put(User(user_id="u1", name="Alice"))
+    ex = await db.exceptions()
+    with pytest.raises(ex.ConditionalCheckFailedException):
+        await db.delete(User(user_id="u1", name="Alice"), condition_expression=Attr("user_id").not_exists())
+
+    # item should still be there
+    assert await db.get(User, hash_key="u1") is not None
+
+    # correct condition succeeds
+    await db.delete(User(user_id="u1", name="Alice"), condition_expression=Attr("user_id").exists())
+    assert await db.get(User, hash_key="u1") is None
 
 
 async def test_get_supports_specific_set_member(dynamo_resource):

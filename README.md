@@ -389,7 +389,7 @@ print(result.unprocessed_keys)
 Access boto3 DynamoDB exception classes:
 
 ```python
-ex = await db.exceptions
+ex = await db.exceptions()
 ```
 
 Example:
@@ -398,7 +398,7 @@ Example:
 import pytest
 from boto3.dynamodb.conditions import Attr
 
-ex = await db.exceptions
+ex = await db.exceptions()
 with pytest.raises(ex.ConditionalCheckFailedException):
     await db.put(
         User(user_id="u1", name="Alice"),

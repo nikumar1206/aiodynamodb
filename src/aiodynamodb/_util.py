@@ -107,9 +107,16 @@ def _key_condition_expressions(
     builder: CustomConditionExpressionBuilder | None = None,
 ) -> KeyConditionExpression:
     """Build a request fragment for query key conditions."""
-    dynamo_expression = {}
+    dynamo_expression = KeyConditionExpression(
+        KeyConditionExpression=None,
+        ExpressionAttributeNamesT=None,
+        ExpressionAttributeValuesT=None,
+    )
     condition, names, values = _build_condition_expression(
-        model, expression, is_key_condition=True, custom_builder=builder
+        model,
+        expression,
+        is_key_condition=True,
+        custom_builder=builder,
     )
     if condition is not None:
         dynamo_expression["KeyConditionExpression"] = condition

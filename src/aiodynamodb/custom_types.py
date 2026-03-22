@@ -21,4 +21,4 @@ type JSONStr[T: BaseModel] = Annotated[
 type KeyT[T] = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime
 
 
-__all__ = (Timestamp, TimestampMillis, TimestampMicros, TimestampNanos, JSONStr, KeyT)
+__all__ = ("Timestamp", "TimestampMillis", "TimestampMicros", "TimestampNanos", "JSONStr", "KeyT")
