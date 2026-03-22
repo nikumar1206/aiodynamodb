@@ -1,19 +1,3 @@
-from __future__ import annotations
-
-from typing import Any, TypedDict
-
-from boto3.dynamodb.conditions import ConditionBase
-from pydantic import BaseModel
-from types_aiobotocore_dynamodb.type_defs import UniversalAttributeValueTypeDef
-
-from aiodynamodb.conditions import CustomConditionExpressionBuilder
-from aiodynamodb.models import DynamoModel
-from aiodynamodb.projection import ProjectionExpressionArg, ProjectionExpressionBuilder
-
-type ConditionExpressionT = str | None
-type ExpressionAttributeNamesT = dict[str, str] | None
-type ExpressionAttributeValuesT = dict[str, UniversalAttributeValueTypeDef] | None
-
 """Internal helpers for building DynamoDB expression payloads.
 
 These functions convert high-level condition and projection inputs into the
@@ -21,36 +5,45 @@ request fragments expected by boto/aioboto3. They are shared across read and
 write APIs so placeholder handling stays consistent.
 """
 
+from typing import Any, TypedDict
 
-class ConditionExpression(TypedDict):
+from boto3.dynamodb.conditions import ConditionBase
+from pydantic import BaseModel
+
+from aiodynamodb.conditions import CustomConditionExpressionBuilder
+from aiodynamodb.models import DynamoModel
+from aiodynamodb.projection import ProjectionExpressionArg, ProjectionExpressionBuilder
+
+
+class ConditionExpression(TypedDict, total=False):
     """Payload fragment for DynamoDB ``ConditionExpression`` requests."""
 
-    ConditionExpression: ConditionExpressionT
-    ExpressionAttributeNamesT: ExpressionAttributeNamesT
-    ExpressionAttributeValuesT: ExpressionAttributeValuesT
+    ConditionExpression: str
+    ExpressionAttributeNames: dict[str, str]
+    ExpressionAttributeValues: dict[str, Any]
 
 
-class KeyConditionExpression(TypedDict):
+class KeyConditionExpression(TypedDict, total=False):
     """Payload fragment for DynamoDB ``KeyConditionExpression`` requests."""
 
-    KeyConditionExpression: ConditionExpressionT
-    ExpressionAttributeNamesT: ExpressionAttributeNamesT
-    ExpressionAttributeValuesT: ExpressionAttributeValuesT
+    KeyConditionExpression: str
+    ExpressionAttributeNames: dict[str, str]
+    ExpressionAttributeValues: dict[str, Any]
 
 
-class FilterExpression(TypedDict):
+class FilterExpression(TypedDict, total=False):
     """Payload fragment for DynamoDB ``FilterExpression`` requests."""
 
-    FilterExpression: ConditionExpressionT
-    ExpressionAttributeNamesT: ExpressionAttributeNamesT
-    ExpressionAttributeValuesT: ExpressionAttributeValuesT
+    FilterExpression: str
+    ExpressionAttributeNames: dict[str, str]
+    ExpressionAttributeValues: dict[str, Any]
 
 
-class ProjectionExpression(TypedDict):
+class ProjectionExpression(TypedDict, total=False):
     """Payload fragment for DynamoDB ``ProjectionExpression`` requests."""
 
-    ProjectionExpression: ConditionExpressionT
-    ExpressionAttributeNamesT: ExpressionAttributeNamesT
+    ProjectionExpression: str
+    ExpressionAttributeNames: dict[str, str]
 
 
 def _build_condition_expression(
@@ -60,7 +53,7 @@ def _build_condition_expression(
     is_key_condition: bool = False,
     custom_builder: CustomConditionExpressionBuilder | None = None,
     # needed as this is a statefiul object with autoincrementing values!
-) -> tuple[ConditionExpression, ExpressionAttributeNamesT, ExpressionAttributeValuesT]:
+) -> tuple[str | None, dict[str, str] | None, dict[str, Any] | None]:
     """Build the raw expression string plus placeholder maps.
 
     When ``expression`` is already a plain string, it is passed through and no
@@ -87,7 +80,7 @@ def _condition_expressions(
     builder: CustomConditionExpressionBuilder | None = None,
 ) -> ConditionExpression:
     """Build a request fragment for write-style condition expressions."""
-    dynamo_expression = {}
+    dynamo_expression: ConditionExpression = {}
     condition, names, values = _build_condition_expression(
         model, expression, is_key_condition=False, custom_builder=builder
     )
@@ -107,9 +100,12 @@ def _key_condition_expressions(
     builder: CustomConditionExpressionBuilder | None = None,
 ) -> KeyConditionExpression:
     """Build a request fragment for query key conditions."""
-    dynamo_expression = {}
+    dynamo_expression: KeyConditionExpression = {}
     condition, names, values = _build_condition_expression(
-        model, expression, is_key_condition=True, custom_builder=builder
+        model,
+        expression,
+        is_key_condition=True,
+        custom_builder=builder,
     )
     if condition is not None:
         dynamo_expression["KeyConditionExpression"] = condition
@@ -126,7 +122,7 @@ def _add_filter_expressions(
     *,
     query_args: dict[str, Any],
     builder: CustomConditionExpressionBuilder | None = None,
-) -> FilterExpression:
+) -> None:
     """Merge filter expressions into an existing query argument payload.
 
     This mutates ``query_args`` so callers can share placeholder state across
@@ -145,7 +141,6 @@ def _add_filter_expressions(
             existing_values = query_args.get("ExpressionAttributeValues", {})
             existing_values.update(values)
             query_args["ExpressionAttributeValues"] = existing_values
-    return query_args
 
 
 def _projection_expression(
@@ -158,7 +153,7 @@ def _projection_expression(
 
     built = ProjectionExpressionBuilder(model).build_projection_expression(projection_expression)
 
-    payload: dict[str, Any] = {
+    payload: ProjectionExpression = {
         "ProjectionExpression": built.projection_expression,
     }
     if built.expression_attribute_names:

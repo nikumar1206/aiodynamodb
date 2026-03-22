@@ -1,7 +1,8 @@
 """
 aiodynamodb - Async DynamoDB ORM with Pydantic.
 
-A modern, async-first DynamoDB ORM built on aioboto3 and Pydantic v2.
+An async-first DynamoDB ORM built on aioboto3 and Pydantic v2.
+Note, not threadsafe.
 
 Example:
     from aiodynamodb import table, DynamoDB, DynamoModel
@@ -28,6 +29,7 @@ from aiodynamodb import custom_types
 from aiodynamodb.client import (
     DynamoDB,
 )
+from aiodynamodb.custom_types import ReturnValues
 from aiodynamodb.models import (
     BatchDelete,
     BatchGet,
@@ -35,7 +37,6 @@ from aiodynamodb.models import (
     BatchPut,
     BatchWriteResult,
     DynamoModel,
-    Page,
     TableMeta,
     TransactConditionCheck,
     TransactDelete,
@@ -58,7 +59,6 @@ __all__ = [
     "DynamoDB",
     "DynamoModel",
     "TableMeta",
-    "Page",
     "BatchGet",
     "BatchPut",
     "BatchDelete",
@@ -71,8 +71,8 @@ __all__ = [
     "TransactUpdate",
     "ProjectionAttr",
     "UpdateAttr",
-    "UpdateAttr",
     "table",
     "VERSION",
     "custom_types",
+    "ReturnValues",
 ]

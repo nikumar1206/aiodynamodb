@@ -4,13 +4,13 @@ import pytest
 from botocore.exceptions import ClientError
 from pydantic_core import TzInfo
 
-from aiodynamodb import DynamoDB, DynamoModel, UpdateAttr, table
+from aiodynamodb import DynamoModel, UpdateAttr, table
 from aiodynamodb.custom_types import Timestamp
 from tests.entities import Basket, ComplexOrder, Item, User
 
 
 async def test_update_supports_high_level_update_expression(users_table):
-    db = DynamoDB()
+    db = users_table
 
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 
@@ -123,8 +123,8 @@ async def test_update_supports_specific_indexed_list_element(complex_order_table
     assert updated.basket.items[1].qty == 9
 
 
-async def test_update_can_return_raw_item(users_table):
-    db = DynamoDB()
+async def test_update_returns_model_instance(users_table):
+    db = users_table
 
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 
@@ -133,18 +133,13 @@ async def test_update_can_return_raw_item(users_table):
         hash_key="u1",
         update_expression={UpdateAttr("name").set("Bob")},
         return_values="ALL_NEW",
-        cast=False,
     )
 
-    assert updated == {
-        "user_id": "u1",
-        "name": "Bob",
-        "email": "alice@example.com",
-    }
+    assert updated == User(user_id="u1", name="Bob", email="alice@example.com")
 
 
 async def test_update_returns_none_without_return_values(users_table):
-    db = DynamoDB()
+    db = users_table
 
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 

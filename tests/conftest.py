@@ -1,4 +1,5 @@
 import os
+from collections.abc import AsyncGenerator
 
 import pytest
 from aiomoto import mock_aws
@@ -18,7 +19,7 @@ def _aws_credentials():
 
 
 @pytest.fixture
-async def dynamo_resource() -> DynamoDB:
+async def dynamo_resource() -> AsyncGenerator[DynamoDB]:
     """Yield a mocked DynamoDB resource for table creation."""
     async with mock_aws():
         yield DynamoDB()

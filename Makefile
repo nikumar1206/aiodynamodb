@@ -8,7 +8,7 @@ upgrade: ## Upgrade dependencies
 	uv sync --upgrade  --all-extras
 
 .PHONY: test
-test: install-dev lint## Run tests
+test: install-dev lint typecheck ## Run tests
 	uv run coverage run
 	uv run coverage report
 
@@ -18,6 +18,10 @@ lint: ## Lint
 	uv run ruff check --fix
 	uv run ruff format src tests
 	uv run ruff format src tests --diff
+
+.PHONY: typecheck
+typecheck: ## Run mypy type checks
+	uv run mypy src
 
 .PHONY: build
 build: test ## Run tests and build the package
