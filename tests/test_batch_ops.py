@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 from pydantic_core import TzInfo
 
-from aiodynamodb import BatchDelete, BatchGet, BatchPut, DynamoDB, ProjectionAttr
+from aiodynamodb import BatchDelete, BatchGet, BatchPut, ProjectionAttr
 from tests.entities import Basket, ComplexOrder, Item, User
 
 
@@ -62,32 +62,21 @@ async def test_batch_get_groups_requests_and_parses_typed_models(dynamo_resource
     assert result.unprocessed_keys == {}
 
 
-async def test_batch_get_rejects_conflicting_projection_for_same_table():
-    db = DynamoDB()
+async def test_batch_get_rejects_conflicting_projection_for_same_table(dynamo_resource):
+    db = dynamo_resource
 
     with pytest.raises(ValueError):
-        await db.batch_get(
-            [
-                BatchGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id")]),
-                BatchGet(User, hash_key="u2", projection_expression=[ProjectionAttr("name")]),
-            ]
-        )
+        await db.batch_get([
+            BatchGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id")]),
+            BatchGet(User, hash_key="u2", projection_expression=[ProjectionAttr("name")]),
+        ])
 
 
-async def test_batch_get_can_return_raw_items(dynamo_resource):
+async def test_batch_get_returns_model_instances(dynamo_resource):
     db = dynamo_resource
     await db.create_table(User)
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 
-    result = await db.batch_get(
-        [BatchGet(User, hash_key="u1")],
-        cast=False,
-    )
+    result = await db.batch_get([BatchGet(User, hash_key="u1")])
 
-    assert result.items[User] == [
-        {
-            "user_id": "u1",
-            "name": "Alice",
-            "email": "alice@example.com",
-        }
-    ]
+    assert result.items[User] == [User(user_id="u1", name="Alice", email="alice@example.com")]

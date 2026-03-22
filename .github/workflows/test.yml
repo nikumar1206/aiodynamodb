@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +34,9 @@ jobs:
 
       - name: Lint with ruff
         run: uv run ruff check src tests
+
+      - name: Type check with mypy
+        run: uv run mypy src
 
       - name: Run tests
         run: uv run pytest tests -v

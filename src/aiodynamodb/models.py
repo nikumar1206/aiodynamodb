@@ -1,17 +1,17 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Self, cast
 
 from boto3.dynamodb.conditions import ConditionBase
 from pydantic import BaseModel
 from types_aiobotocore_dynamodb.literals import ProjectionTypeType
 from types_aiobotocore_dynamodb.type_defs import (
     GlobalSecondaryIndexUnionTypeDef,
+    KeySchemaElementTypeDef,
     LocalSecondaryIndexTypeDef,
     OnDemandThroughputTypeDef,
     ProvisionedThroughputTypeDef,
     WarmThroughputTypeDef,
+    WriteRequestOutputTypeDef,
 )
 
 from aiodynamodb._serializers import DESERIALIZER, SERIALIZER, _to_dynamo_compatible
@@ -42,17 +42,14 @@ class GSI:
             A ``GlobalSecondaryIndexes`` entry compatible with
             ``CreateTable``.
         """
+        key_schema: list[KeySchemaElementTypeDef] = [{"AttributeName": self.hash_key, "KeyType": "HASH"}]
+        if self.range_key:
+            key_schema.append({"AttributeName": self.range_key, "KeyType": "RANGE"})
         _dict: GlobalSecondaryIndexUnionTypeDef = {
             "IndexName": self.name,
-            "KeySchema": [
-                {"AttributeName": self.hash_key, "KeyType": "HASH"},
-            ],
+            "KeySchema": key_schema,
             "Projection": {"ProjectionType": self.projection},
         }
-        if self.provisioned_throughput:
-            _dict["ProvisionedThroughputTypeDef"] = self.provisioned_throughput
-        if self.range_key:
-            _dict["KeySchema"].append({"AttributeName": self.range_key, "KeyType": "RANGE"})
         if self.non_key_attributes:
             _dict["Projection"]["NonKeyAttributes"] = self.non_key_attributes
         if self.provisioned_throughput:
@@ -119,7 +116,7 @@ class DynamoModel(BaseModel):
     def to_dynamo_compatible(self) -> dict[str, Any]:
         """Serialize model fields to DynamoDB AttributeValue objects."""
         dumped = self.model_dump(mode="json")
-        return _to_dynamo_compatible(dumped)
+        return cast(dict[str, Any], _to_dynamo_compatible(dumped))
 
     @classmethod
     def from_dynamo(cls, raw: dict[str, Any]) -> Self:
@@ -171,26 +168,21 @@ def table(name: str, hash_key: str, range_key: str | None = None, indexes: list[
 class QueryResult[T: DynamoModel]:
     """One page of typed query results."""
 
-    items: list[T | Raw]
-    last_evaluated_key: dict[str, Any] | None
-
-
-@dataclass
-class Page[T]:
-    """Represents one page of results from a paginated DynamoDB operation."""
-
     items: list[T]
-    last_evaluated_key: dict | None = None
+    last_evaluated_key: dict[str, Any] | None
 
 
 @dataclass(frozen=True)
 class TransactGet[T: DynamoModel]:
-    """Single item read request used by ``transact_get``."""
+    """Single item read request used by ``transact_get``.
+
+    Note: ``transact_get_items`` is always strongly consistent — there is no
+    per-item consistency setting in the DynamoDB API.
+    """
 
     model: type[T]
     hash_key: KeyT
     range_key: KeyT | None = None
-    consistent_read: bool = False
     projection_expression: ProjectionExpressionArg | None = None
 
 
@@ -202,7 +194,7 @@ class TransactPut[T: DynamoModel]:
     condition_expression: ConditionBase | None = None
 
     @property
-    def model(self) -> T:
+    def model(self) -> type[T]:
         return type(self.item)
 
 
@@ -255,7 +247,7 @@ class BatchPut[T: DynamoModel]:
     item: T
 
     @property
-    def model(self) -> T:
+    def model(self) -> type[T]:
         return type(self.item)
 
 
@@ -272,7 +264,7 @@ class BatchDelete[T: DynamoModel]:
 class BatchGetResult[T: DynamoModel]:
     """Typed result returned by ``batch_get``."""
 
-    items: dict[type[T], list[T | Raw]]
+    items: dict[type[T], list[T]]
     unprocessed_keys: dict[str, Any]
 
 
@@ -280,4 +272,4 @@ class BatchGetResult[T: DynamoModel]:
 class BatchWriteResult:
     """Result returned by ``batch_write``."""
 
-    unprocessed_items: dict[str, list[dict[str, Any]]]
+    unprocessed_items: dict[str, list[WriteRequestOutputTypeDef]]

@@ -3,9 +3,10 @@ from tests.entities import ComplexOrder, User
 
 
 def test_projection_builder_serializes_top_level_attributes():
-    built = ProjectionExpressionBuilder(User).build_projection_expression(
-        [ProjectionAttr("user_id"), ProjectionAttr("name")]
-    )
+    built = ProjectionExpressionBuilder(User).build_projection_expression([
+        ProjectionAttr("user_id"),
+        ProjectionAttr("name"),
+    ])
 
     assert built.projection_expression == "#n0, #n1"
     assert built.expression_attribute_names == {

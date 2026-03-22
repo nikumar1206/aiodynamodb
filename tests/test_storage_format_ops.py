@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from pydantic_core import TzInfo
 from types_aiobotocore_dynamodb import DynamoDBClient
 
-from aiodynamodb import DynamoDB, DynamoModel, table
+from aiodynamodb import DynamoModel, table
 from aiodynamodb.custom_types import JSONStr, Timestamp, TimestampMillis
 from tests.entities import Basket, Item
 
@@ -23,7 +23,7 @@ async def test_items_are_stored_in_the_correct_raw_format(complex_order_table):
         total: int
         basket: Basket
 
-    db = DynamoDB()
+    db = complex_order_table
     await db.create_table(Complex)
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
     await db.put(

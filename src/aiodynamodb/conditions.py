@@ -1,12 +1,7 @@
-from __future__ import annotations
-
+import typing
 from typing import Any, get_args, get_origin
 
-from boto3.dynamodb.conditions import (
-    ATTR_NAME_REGEX,
-    AttributeBase,
-    ConditionExpressionBuilder,
-)
+from boto3.dynamodb.conditions import ATTR_NAME_REGEX, AttributeBase, ConditionExpressionBuilder
 from pydantic import BaseModel
 
 from aiodynamodb._serializers import _serialize_custom_attribute
@@ -29,7 +24,7 @@ class CustomConditionExpressionBuilder[T: BaseModel](ConditionExpressionBuilder)
     ):
         if isinstance(value, AttributeBase):
             self._current_attribute_name = value.name
-        return super()._build_expression_component(
+        return super()._build_expression_component(  # type: ignore[misc]
             value,
             attribute_name_placeholders,
             attribute_value_placeholders,
@@ -55,13 +50,13 @@ class CustomConditionExpressionBuilder[T: BaseModel](ConditionExpressionBuilder)
         if has_grouped_values:
             placeholder_list = []
             for v in value:
-                value_placeholder = self._get_value_placeholder()
-                self._value_count += 1
+                value_placeholder = self._get_value_placeholder()  # type: ignore[attr-defined]
+                self._value_count += 1  # type: ignore[attr-defined]
                 placeholder_list.append(value_placeholder)
                 attribute_value_placeholders[value_placeholder] = self._serialize_value(v)
             return "(" + ", ".join(placeholder_list) + ")"
-        value_placeholder = self._get_value_placeholder()
-        self._value_count += 1
+        value_placeholder = self._get_value_placeholder()  # type: ignore[attr-defined]
+        self._value_count += 1  # type: ignore[attr-defined]
         attribute_value_placeholders[value_placeholder] = self._serialize_value(value)
         return value_placeholder
 
@@ -72,8 +67,8 @@ class CustomConditionExpressionBuilder[T: BaseModel](ConditionExpressionBuilder)
         placeholder_format = ATTR_NAME_REGEX.sub("%s", attribute_name)
         str_format_args = []
         for part in attribute_name_parts:
-            name_placeholder = self._get_name_placeholder()
-            self._name_count += 1
+            name_placeholder = self._get_name_placeholder()  # type: ignore[attr-defined]
+            self._name_count += 1  # type: ignore[attr-defined]
             str_format_args.append(name_placeholder)
             attribute_name_placeholders[name_placeholder] = part
         return placeholder_format % tuple(str_format_args)
@@ -132,21 +127,21 @@ class CustomConditionExpressionBuilder[T: BaseModel](ConditionExpressionBuilder)
             return None
 
         if origin in (list, set, tuple):
-            args = [arg for arg in get_args(resolved) if arg is not Ellipsis]
-            if args:
-                return self._extract_nested_model(args[0])
+            inner = [arg for arg in get_args(resolved) if arg is not Ellipsis]
+            if inner:
+                return self._extract_nested_model(inner[0])
             return None
 
         if origin is dict:
-            args = get_args(resolved)
-            if len(args) == 2:
-                return self._extract_nested_model(args[1])
+            dict_args = get_args(resolved)
+            if len(dict_args) == 2:
+                return self._extract_nested_model(dict_args[1])
             return None
 
-        if str(origin) == "typing.Annotated":
-            args = get_args(resolved)
-            if args:
-                return self._extract_nested_model(args[0])
+        if origin == typing.Annotated:
+            annotated_args = get_args(resolved)
+            if annotated_args:
+                return self._extract_nested_model(annotated_args[0])
             return None
 
         return None

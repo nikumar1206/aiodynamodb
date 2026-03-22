@@ -194,7 +194,6 @@ user = await db.get(
     User,
     hash_key="u1",
     projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("name")],
-    cast=False,
 )
 ```
 
@@ -274,7 +273,7 @@ async for page in db.query(
     Order,
     key_condition_expression=Key("order_id").eq("o1"),
     limit=25,
-    scan_index_forward=False,
+    scan_index_forward=True,
 ):
     for item in page.items:
         print(item)
@@ -290,7 +289,6 @@ Important arguments:
 - `exclusive_start_key`: continue from a previous page
 - `consistent_read`: strongly consistent reads (where supported)
 - `projection_expression`: project selected attributes with `ProjectionAttr(...)`
-- `cast=False`: return raw Python dictionaries instead of model instances
 
 ### `create_table` / `delete_table`
 
@@ -345,8 +343,7 @@ items = await db.transact_get(
     [
         TransactGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id")]),
         TransactGet(User, hash_key="u2"),
-    ],
-    cast=False,
+    ]
 )
 ```
 
@@ -377,8 +374,7 @@ result = await db.batch_get(
     [
         BatchGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id")]),
         BatchGet(User, hash_key="u2"),
-    ],
-    cast=False,
+    ]
 )
 print(result.items[User])
 print(result.unprocessed_keys)
@@ -389,7 +385,7 @@ print(result.unprocessed_keys)
 Access boto3 DynamoDB exception classes:
 
 ```python
-ex = await db.exceptions
+ex = await db.exceptions()
 ```
 
 Example:
@@ -398,7 +394,7 @@ Example:
 import pytest
 from boto3.dynamodb.conditions import Attr
 
-ex = await db.exceptions
+ex = await db.exceptions()
 with pytest.raises(ex.ConditionalCheckFailedException):
     await db.put(
         User(user_id="u1", name="Alice"),
@@ -424,3 +420,14 @@ Current API is intentionally small and focused on:
 - table lifecycle helpers
 
 If you need additional DynamoDB operations, extend the client with the same typed model pattern.
+
+
+## Roadmap
+- retry behavior to transactions/queries ?
+- documentation
+    - normal python docs needed.
+    - some funky behavior we do as well.
+        - like this isnt thread safe.
+- performance evaluation needed.
+    - potentially run behind a pool with a context-manager
+- e2e testing with localstack or similar.

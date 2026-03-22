@@ -1,15 +1,14 @@
-from __future__ import annotations
-
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
-from decimal import Decimal
-from functools import cached_property
-from typing import TYPE_CHECKING, Any, assert_never
+from typing import Any, Literal, assert_never, cast
 
 import aioboto3
+from boto3.dynamodb.conditions import ConditionBase
 from types_aiobotocore_dynamodb import DynamoDBServiceResource
+from types_aiobotocore_dynamodb.client import DynamoDBClient, Exceptions
 from types_aiobotocore_dynamodb.literals import BillingModeType, TableClassType
+from types_aiobotocore_dynamodb.service_resource import Table
 from types_aiobotocore_dynamodb.type_defs import (
     AttributeDefinitionTypeDef,
     CreateGlobalTableInputTypeDef,
@@ -17,22 +16,37 @@ from types_aiobotocore_dynamodb.type_defs import (
     CreateTableInputTypeDef,
     CreateTableOutputTypeDef,
     DeleteTableOutputTypeDef,
+    KeySchemaElementTypeDef,
+    LocalSecondaryIndexTypeDef,
     ProvisionedThroughputTypeDef,
     TableAttributeValueTypeDef,
+    TagTypeDef,
+    TransactWriteItemsOutputTypeDef,
 )
 
+from aiodynamodb._serializers import (
+    SERIALIZER,
+    _resolve_key_annotation,
+    _serialize_custom_attribute,
+    _to_dynamo_compatible,
+)
 from aiodynamodb._util import (
+    ConditionExpression,
     _add_filter_expressions,
     _condition_expressions,
     _key_condition_expressions,
     _projection_expression,
 )
+from aiodynamodb.conditions import CustomConditionExpressionBuilder
+from aiodynamodb.custom_types import KeyT, ReturnValues, Timestamp, TimestampMicros, TimestampMillis, TimestampNanos
 from aiodynamodb.models import (
     BatchDelete,
     BatchGet,
     BatchGetResult,
     BatchPut,
     BatchWriteResult,
+    DynamoModel,
+    QueryResult,
     Raw,
     TransactConditionCheck,
     TransactDelete,
@@ -40,23 +54,6 @@ from aiodynamodb.models import (
     TransactPut,
     TransactUpdate,
 )
-
-if TYPE_CHECKING:
-    from types_aiobotocore_dynamodb.client import DynamoDBClient
-    from types_aiobotocore_dynamodb.service_resource import Table
-
-from boto3.dynamodb.conditions import Attr, ConditionBase, Key
-
-from aiodynamodb._serializers import (
-    DESERIALIZER,
-    SERIALIZER,
-    _resolve_key_annotation,
-    _serialize_custom_attribute,
-    _to_dynamo_compatible,
-)
-from aiodynamodb.conditions import CustomConditionExpressionBuilder
-from aiodynamodb.custom_types import KeyT, Timestamp, TimestampMicros, TimestampMillis, TimestampNanos
-from aiodynamodb.models import DynamoModel, QueryResult
 from aiodynamodb.projection import ProjectionExpressionArg
 from aiodynamodb.updates import UpdateAttr, UpdateExpressionBuilder
 
@@ -81,28 +78,10 @@ type TransactWriteOperation = (
 type BatchWriteOperation = BatchPut[DynamoModel] | BatchDelete[DynamoModel]
 
 
-def _normalize_python_value(value: Any) -> Any:
-    if isinstance(value, Decimal):
-        if value % 1 == 0:
-            return int(value)
-        return float(value)
-    if isinstance(value, list):
-        return [_normalize_python_value(v) for v in value]
-    if isinstance(value, set):
-        return {_normalize_python_value(v) for v in value}
-    if isinstance(value, dict):
-        return {k: _normalize_python_value(v) for k, v in value.items()}
-    return value
-
-
-def _cast_to_model[T: DynamoModel](cast: bool, item: Raw, model: type[T], _is_raw_dynamo: bool = False):
-    if cast and _is_raw_dynamo:
-        return model.from_dynamo(item)
-    if cast:
-        return model.model_validate(item)
+def _to_model[T: DynamoModel](item: Raw, model: type[T], _is_raw_dynamo: bool = False) -> T:
     if _is_raw_dynamo:
-        return {k: DESERIALIZER._to_dynamo(v) for k, v in item.items()}
-    return {k: _normalize_python_value(v) for k, v in item.items()}
+        return model.from_dynamo(item)
+    return model.model_validate(item)
 
 
 def _merge_expression_attribute_names(
@@ -137,23 +116,25 @@ class DynamoDB:
     operations and returns validated model instances for reads/queries.
     """
 
-    def __init__(self, session: aioboto3.Session | None = None, hask_key_types: dict[Any, str] = _KEY_TO_TYPE):
+    def __init__(self, session: aioboto3.Session | None = None, hash_key_types: dict[Any, str] = _KEY_TO_TYPE):
         """Create a client instance.
 
         Args:
             session: Optional ``aioboto3`` session. If omitted, a new session is created.
         """
         self._session = session or aioboto3.Session()
-        self.hask_key_types = hask_key_types
+        self.hash_key_types = hash_key_types
+        self._exceptions: Exceptions | None = None
 
-    @cached_property
     async def exceptions(self):
         """Return the boto3 DynamoDB exception namespace for error handling."""
-        client: DynamoDBClient
-        async with self._session.client("dynamodb") as client:
-            return client.exceptions
+        if self._exceptions is None:
+            client: DynamoDBClient
+            async with self._session.client("dynamodb") as client:
+                self._exceptions = client.exceptions
+        return self._exceptions
 
-    async def put[T: DynamoModel](self, item: T, *, condition_expression: ConditionBase = None) -> None:
+    async def put(self, item: DynamoModel, *, condition_expression: ConditionBase | None = None) -> None:
         """Insert or replace an item in DynamoDB.
 
         Args:
@@ -166,7 +147,7 @@ class DynamoDB:
             table: Table = await resource.Table(item.Meta.table_name)
             await table.put_item(Item=item.to_dynamo_compatible(), **args)
 
-    async def delete[T: DynamoModel](self, item: T, *, condition_expression: ConditionBase = None) -> None:
+    async def delete(self, item: DynamoModel, *, condition_expression: ConditionBase | None = None) -> None:
         """Delete an item from DynamoDB.
 
         Args:
@@ -174,10 +155,16 @@ class DynamoDB:
             condition_expression: Optional conditional expression that must match
                 for the delete to succeed.
         """
+        meta = type(item).Meta
+        key = _build_key(
+            type(item),
+            hash_key=getattr(item, meta.hash_key),
+            range_key=getattr(item, meta.range_key) if meta.range_key else None,
+        )
         args = _condition_expressions(type(item), condition_expression)
         async with self._resource() as resource:
-            table: Table = await resource.Table(item.Meta.table_name)
-            await table.delete_item(Item=item.to_dynamo_compatible(), **args)
+            table: Table = await resource.Table(meta.table_name)
+            await table.delete_item(Key=key, **args)
 
     async def update[T: DynamoModel](
         self,
@@ -187,9 +174,8 @@ class DynamoDB:
         update_expression: set[UpdateAttr],
         range_key: KeyT | None = None,
         condition_expression: ConditionBase | None = None,
-        return_values: str | None = None,
-        cast: bool = True,
-    ) -> T | Raw | None:
+        return_values: ReturnValues | None = None,
+    ) -> T | None:
         """Update an item by key and optionally return updated attributes.
 
         Args:
@@ -201,12 +187,10 @@ class DynamoDB:
             condition_expression: Optional conditional expression.
             return_values: Optional DynamoDB return mode (for example,
                 ``"ALL_NEW"``). When omitted, DynamoDB default behavior applies.
-            cast: When ``True``, validate the returned attributes as ``model``.
-                When ``False``, return a raw Python dictionary.
 
         Returns:
-            Parsed model instance or raw item when DynamoDB returns
-            ``Attributes``; otherwise ``None``.
+            Validated model instance when DynamoDB returns ``Attributes``;
+            otherwise ``None``.
         """
         args: dict[str, Any] = {
             "Key": _build_key(model, hash_key=hash_key, range_key=range_key),
@@ -237,7 +221,7 @@ class DynamoDB:
         item = response.get("Attributes")
         if not item:
             return None
-        return _cast_to_model(cast, item, model)
+        return _to_model(item, model)
 
     async def get[T: DynamoModel](
         self,
@@ -247,8 +231,7 @@ class DynamoDB:
         range_key: KeyT | None = None,
         consistent_reads: bool = False,
         projection_expression: ProjectionExpressionArg | None = None,
-        cast: bool = True,
-    ) -> T | dict[str, Any] | None:
+    ) -> T | None:
         """Get a single item by primary key.
 
         Args:
@@ -258,11 +241,9 @@ class DynamoDB:
             consistent_reads: Whether to use strongly consistent reads.
             projection_expression: Optional list of ``ProjectionAttr(...)``
                 paths to project.
-            cast: When ``True``, validate the returned item as ``model``.
-                When ``False``, return a raw Python dictionary.
 
         Returns:
-            Parsed model instance or raw item when found, otherwise ``None``.
+            Validated model instance when found, otherwise ``None``.
         """
         meta = model.Meta
         key = {meta.hash_key: _serialize_custom_attribute(model, meta.hash_key, hash_key)}
@@ -270,10 +251,10 @@ class DynamoDB:
             serialized = _serialize_custom_attribute(model, meta.range_key, range_key)
             key[meta.range_key] = serialized
 
-        args = dict(
-            Key=key,
-            ConsistentRead=consistent_reads,
-        )
+        args: dict[str, Any] = {
+            "Key": key,
+            "ConsistentRead": consistent_reads,
+        }
         args.update(_projection_expression(model, projection_expression))
 
         async with self._resource() as resource:
@@ -282,7 +263,7 @@ class DynamoDB:
             item = resp.get("Item")
             if item is None:
                 return None
-        return _cast_to_model(cast, item, model)
+        return _to_model(item, model)
 
     async def query[T: DynamoModel](
         self,
@@ -290,14 +271,13 @@ class DynamoDB:
         *,
         index_name: str | None = None,
         limit: int | None = None,
-        key_condition_expression: Key | None = None,
-        filter_expression: Attr | None = None,
+        key_condition_expression: ConditionBase | None = None,
+        filter_expression: ConditionBase | None = None,
         exclusive_start_key: dict[str, TableAttributeValueTypeDef] | None = None,
         return_consumed_capacity=False,
         consistent_read: bool = False,
-        scan_index_forward=False,
+        scan_index_forward=True,
         projection_expression: ProjectionExpressionArg | None = None,
-        cast: bool = True,
     ) -> AsyncIterator[QueryResult[T]]:
         """Query items and yield paginated results.
 
@@ -315,12 +295,9 @@ class DynamoDB:
                 ``False``.
             projection_expression: Optional list of ``ProjectionAttr(...)``
                 paths to project.
-            cast: When ``True``, validate page items as ``model``. When
-                ``False``, yield raw Python dictionaries.
 
         Yields:
-            ``QueryResult`` pages containing parsed model instances or raw
-            Python dictionaries.
+            ``QueryResult`` pages containing validated model instances.
         """
         meta = model.Meta
 
@@ -371,7 +348,7 @@ class DynamoDB:
             while True:
                 page = await table.query(**query_args)
                 yield QueryResult(
-                    items=[_cast_to_model(cast, item, model) for item in page.get("Items", [])],
+                    items=[_to_model(item, model) for item in page.get("Items", [])],
                     last_evaluated_key=page.get("LastEvaluatedKey"),
                 )
                 if "LastEvaluatedKey" not in page:
@@ -379,7 +356,7 @@ class DynamoDB:
                 query_args["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
     async def transact_get[T: DynamoModel](
-        self, requests: list[TransactGet[T]], *, return_consumed_capacity=False, cast: bool = True
+        self, requests: list[TransactGet[T]], *, return_consumed_capacity=False
     ) -> list[T | None]:
         """Read up to 100 items atomically across one or more tables.
 
@@ -387,12 +364,10 @@ class DynamoDB:
             requests: Ordered list of transaction get requests.
             return_consumed_capacity: Include consumed capacity information
                 (`"TOTAL"` in DynamoDB request).
-            cast: When ``True``, validate returned items as their request model.
-                When ``False``, return raw Python dictionaries.
 
         Returns:
-            Ordered list of parsed model instances, raw items, or ``None`` for
-            missing items.
+            Ordered list of validated model instances or ``None`` for missing
+            items, in request order.
         """
         transact_items = []
         for request in requests:
@@ -412,14 +387,13 @@ class DynamoDB:
             response = await client.transact_get_items(**args)
 
         items = response.get("Responses", [])
-        results: list[DynamoModel | None] = []
+        results: list[T | None] = []
         for request, item_response in zip(requests, items, strict=False):
             item = item_response.get("Item")
             if item is None:
                 results.append(None)
                 continue
-            deserialized = _cast_to_model(cast, item, request.model, True)
-            results.append(deserialized)
+            results.append(_to_model(item, request.model, True))
         if len(results) < len(requests):
             results.extend([None] * (len(requests) - len(results)))
         return results
@@ -431,7 +405,7 @@ class DynamoDB:
         client_request_token: str | None = None,
         return_consumed_capacity=False,
         return_item_collection_metrics=False,
-    ) -> dict[str, Any]:
+    ) -> TransactWriteItemsOutputTypeDef:
         """Execute up to 100 transactional write operations atomically.
 
         Supported operations are ``TransactPut``, ``TransactDelete``,
@@ -526,7 +500,6 @@ class DynamoDB:
         requests: list[BatchGet[DynamoModel]],
         *,
         return_consumed_capacity=False,
-        cast: bool = True,
     ) -> BatchGetResult:
         """Fetch up to 100 items using DynamoDB ``batch_get_item``.
 
@@ -537,8 +510,6 @@ class DynamoDB:
             requests: Ordered list of batch get requests.
             return_consumed_capacity: Include consumed capacity information
                 (`"TOTAL"` in DynamoDB request).
-            cast: When ``True``, validate returned items as their request
-                model. When ``False``, return raw Python dictionaries.
         """
         table_to_model: dict[str, type[DynamoModel]] = {}
         request_items: dict[str, dict[str, Any]] = {}
@@ -580,12 +551,12 @@ class DynamoDB:
         async with self._client() as client:
             response = await client.batch_get_item(**args)
 
-        parsed_items: dict[type[DynamoModel], list[DynamoModel | dict[str, Any]]] = {}
+        parsed_items: dict[type[DynamoModel], list[DynamoModel]] = {}
         for table_name, items in response.get("Responses", {}).items():
             model = table_to_model.get(table_name)
             if model is None:
                 continue
-            parsed_items[model] = [_cast_to_model(cast, item, model, True) for item in items]
+            parsed_items[model] = [_to_model(item, model, True) for item in items]
         return BatchGetResult(
             items=parsed_items,
             unprocessed_keys=response.get("UnprocessedKeys", {}),
@@ -604,13 +575,13 @@ class DynamoDB:
         for operation in operations:
             match operation:
                 case BatchPut(item=item) as p:
-                    request_items.setdefault(p.model.Meta.table_name, []).append(
-                        {"PutRequest": {"Item": item.to_dynamo()}}
-                    )
+                    request_items.setdefault(p.model.Meta.table_name, []).append({
+                        "PutRequest": {"Item": item.to_dynamo()}
+                    })
                 case BatchDelete(model=model, hash_key=hash_key, range_key=range_key):
-                    request_items.setdefault(model.Meta.table_name, []).append(
-                        {"DeleteRequest": {"Key": _build_dynamo_key(model, hash_key=hash_key, range_key=range_key)}}
-                    )
+                    request_items.setdefault(model.Meta.table_name, []).append({
+                        "DeleteRequest": {"Key": _build_dynamo_key(model, hash_key=hash_key, range_key=range_key)}
+                    })
                 case _ as impossible:
                     assert_never(impossible)
 
@@ -632,7 +603,7 @@ class DynamoDB:
         *,
         billing_mode: BillingModeType = "PAY_PER_REQUEST",
         provisioned_throughput: ProvisionedThroughputTypeDef | None = None,
-        tags: list[dict[str, str]] | None = None,
+        tags: list[TagTypeDef] | None = None,
         table_class: TableClassType | None = None,
     ) -> CreateTableOutputTypeDef:
         """Create a table for a ``DynamoModel`` definition.
@@ -652,52 +623,55 @@ class DynamoDB:
             Raw ``create_table`` response from the DynamoDB API.
         """
         meta = model.Meta
-        key_schema = [{"AttributeName": meta.hash_key, "KeyType": "HASH"}]
-        attribute_types: dict[str, str] = {}
+        attribute_types: dict[str, Literal["B", "N", "S"]] = {}
 
         def _add_attribute(field_name: str) -> None:
             annotation = _resolve_key_annotation(model.model_fields[field_name].annotation)
-            if annotation not in self.hask_key_types:
+            if annotation not in self.hash_key_types:
                 raise TypeError(
                     f"Unsupported key type for field '{field_name}': {annotation!r}. "
-                    f"Supported types are: {tuple(self.hask_key_types)}"
+                    f"Supported types are: {tuple(self.hash_key_types)}"
                 )
-            attribute_types[field_name] = self.hask_key_types[annotation]
+            attribute_types[field_name] = cast(Literal["B", "N", "S"], self.hash_key_types[annotation])
 
+        key_schema: list[KeySchemaElementTypeDef] = [{"AttributeName": meta.hash_key, "KeyType": "HASH"}]
         _add_attribute(meta.hash_key)
         if meta.range_key:
             key_schema.append({"AttributeName": meta.range_key, "KeyType": "RANGE"})
             _add_attribute(meta.range_key)
 
+        gsi_list = [i.to_dynamo() for i in meta.global_secondary_indexes.values()]
+        for gsi_index in gsi_list:
+            for key in gsi_index.get("KeySchema", []):
+                _add_attribute(key["AttributeName"])
+
+        lsi_list: list[LocalSecondaryIndexTypeDef] = [
+            i.to_dynamo(meta.hash_key) for i in meta.local_secondary_indexes.values()
+        ]
+        for lsi_index in lsi_list:
+            for key in lsi_index.get("KeySchema", []):
+                _add_attribute(key["AttributeName"])
+
+        attribute_definitions: list[AttributeDefinitionTypeDef] = [
+            {"AttributeName": name, "AttributeType": attr_type} for name, attr_type in sorted(attribute_types.items())
+        ]
+
         request: CreateTableInputTypeDef = {
             "TableName": meta.table_name,
             "KeySchema": key_schema,
             "BillingMode": billing_mode,
+            "AttributeDefinitions": attribute_definitions,
         }
         if provisioned_throughput is not None:
             request["ProvisionedThroughput"] = provisioned_throughput
-
-        if meta.global_secondary_indexes:
-            request["GlobalSecondaryIndexes"] = [i.to_dynamo() for i in meta.global_secondary_indexes.values()]
-            for index in request["GlobalSecondaryIndexes"]:
-                for key in index.get("KeySchema", []):
-                    _add_attribute(key["AttributeName"])
-
-        if meta.local_secondary_indexes:
-            request["LocalSecondaryIndexes"] = [
-                i.to_dynamo(meta.hash_key) for i in meta.local_secondary_indexes.values()
-            ]
-            for index in request["LocalSecondaryIndexes"]:
-                for key in index.get("KeySchema", []):
-                    _add_attribute(key["AttributeName"])
+        if gsi_list:
+            request["GlobalSecondaryIndexes"] = gsi_list
+        if lsi_list:
+            request["LocalSecondaryIndexes"] = lsi_list
         if tags:
             request["Tags"] = tags
         if table_class:
             request["TableClass"] = table_class
-        request["AttributeDefinitions"] = [
-            AttributeDefinitionTypeDef(AttributeName=name, AttributeType=attr_type)
-            for name, attr_type in sorted(attribute_types.items())
-        ]
 
         client: DynamoDBClient
         async with self._client() as client:
@@ -773,7 +747,7 @@ def _condition_expressions_for_client(
     expression: ConditionBase | None,
     *,
     builder: CustomConditionExpressionBuilder | None = None,
-) -> dict[str, Any]:
+) -> ConditionExpression:
     payload = _condition_expressions(model, expression, builder=builder)
     if "ExpressionAttributeValues" in payload:
         payload["ExpressionAttributeValues"] = _to_dynamo_expression_values(payload["ExpressionAttributeValues"])
