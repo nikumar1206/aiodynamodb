@@ -39,7 +39,7 @@ from aiodynamodb._util import (
     _projection_expression,
 )
 from aiodynamodb.conditions import CustomConditionExpressionBuilder
-from aiodynamodb.custom_types import KeyT, Timestamp, TimestampMicros, TimestampMillis, TimestampNanos
+from aiodynamodb.custom_types import KeyT, ReturnValues, Timestamp, TimestampMicros, TimestampMillis, TimestampNanos
 from aiodynamodb.models import (
     BatchDelete,
     BatchGet,
@@ -175,7 +175,7 @@ class DynamoDB:
         update_expression: set[UpdateAttr],
         range_key: KeyT | None = None,
         condition_expression: ConditionBase | None = None,
-        return_values: str | None = None,
+        return_values: ReturnValues | None = None,
     ) -> T | None:
         """Update an item by key and optionally return updated attributes.
 

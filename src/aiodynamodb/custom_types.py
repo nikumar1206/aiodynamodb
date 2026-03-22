@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, PlainSerializer
 
@@ -18,5 +18,6 @@ type JSONStr[T: BaseModel] = Annotated[
 
 type KeyT = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime
 
+type ReturnValues = Literal["NONE", "ALL_OLD", "UPDATED_OLD", "ALL_NEW", "UPDATED_NEW"]
 
-__all__ = ("Timestamp", "TimestampMillis", "TimestampMicros", "TimestampNanos", "JSONStr", "KeyT")
+__all__ = ("Timestamp", "TimestampMillis", "TimestampMicros", "TimestampNanos", "JSONStr", "KeyT", "ReturnValues")
