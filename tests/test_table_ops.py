@@ -3,12 +3,10 @@ import pytest
 from aiodynamodb import DynamoModel, table
 
 
-async def test_create_table_supports_optional_settings_and_delete_table(dynamo_resource):
+async def test_create_table_supports_optional_settings_and_delete_table(db):
     @table("events", hash_key="event_id")
     class Event(DynamoModel):
         event_id: str
-
-    db = dynamo_resource
 
     response = await db.create_table(
         Event,
@@ -24,12 +22,10 @@ async def test_create_table_supports_optional_settings_and_delete_table(dynamo_r
     assert delete_response["TableDescription"]["TableName"] == "events"
 
 
-async def test_create_table_rejects_unsupported_key_type(dynamo_resource):
+async def test_create_table_rejects_unsupported_key_type(db):
     @table("bad_keys", hash_key="event_id")
     class BadEvent(DynamoModel):
         event_id: bool
-
-    db = dynamo_resource
 
     with pytest.raises(TypeError):
         await db.create_table(BadEvent)

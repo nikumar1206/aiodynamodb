@@ -41,7 +41,7 @@ class Basket(BaseModel):
     items: list[Item]
 
 
-@table("orders", hash_key="order_id", range_key="created_at", indexes=[order_gsi, order_lsi])
+@table("complex_orders", hash_key="order_id", range_key="created_at", indexes=[order_gsi, order_lsi])
 class ComplexOrder(DynamoModel):
     order_id: str
     created_at: Timestamp
