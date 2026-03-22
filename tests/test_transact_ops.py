@@ -97,7 +97,9 @@ async def test_transact_get_accepts_projection_expression(db: DynamoDB):
 
 async def test_transact_write_supports_update_operation(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
-    await db.put(ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)), total=100, basket=basket))
+    await db.put(
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)), total=100, basket=basket)
+    )
 
     await db.transact_write([
         TransactUpdate(
