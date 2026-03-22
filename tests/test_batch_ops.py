@@ -7,8 +7,7 @@ from aiodynamodb import BatchDelete, BatchGet, BatchPut, ProjectionAttr
 from tests.entities import Basket, ComplexOrder, Item, User
 
 
-async def test_batch_write_applies_put_and_delete(users_table):
-    db = users_table
+async def test_batch_write_applies_put_and_delete(db):
     await db.put(User(user_id="u2", name="Bob"))
 
     result = await db.batch_write(
@@ -25,10 +24,7 @@ async def test_batch_write_applies_put_and_delete(users_table):
     assert await db.get(User, hash_key="u2") is None
 
 
-async def test_batch_get_groups_requests_and_parses_typed_models(dynamo_resource):
-    db = dynamo_resource
-    await db.create_table(User)
-    await db.create_table(ComplexOrder)
+async def test_batch_get_groups_requests_and_parses_typed_models(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
     await db.put(
@@ -62,9 +58,7 @@ async def test_batch_get_groups_requests_and_parses_typed_models(dynamo_resource
     assert result.unprocessed_keys == {}
 
 
-async def test_batch_get_rejects_conflicting_projection_for_same_table(dynamo_resource):
-    db = dynamo_resource
-
+async def test_batch_get_rejects_conflicting_projection_for_same_table(db):
     with pytest.raises(ValueError):
         await db.batch_get([
             BatchGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id")]),
@@ -72,9 +66,7 @@ async def test_batch_get_rejects_conflicting_projection_for_same_table(dynamo_re
         ])
 
 
-async def test_batch_get_returns_model_instances(dynamo_resource):
-    db = dynamo_resource
-    await db.create_table(User)
+async def test_batch_get_returns_model_instances(db):
     await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
 
     result = await db.batch_get([BatchGet(User, hash_key="u1")])

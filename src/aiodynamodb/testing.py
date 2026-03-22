@@ -17,8 +17,8 @@ _FAKE_AWS_CREDENTIALS = {
 
 @asynccontextmanager
 async def mock_dynamodb(
-    patch_env: bool = True,
     *models: type[DynamoModel],
+    patch_env: bool = True,
 ) -> AsyncGenerator[DynamoDB]:
     """Async context manager that provides a mocked DynamoDB instance for testing.
 
