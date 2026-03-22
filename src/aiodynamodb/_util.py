@@ -1,3 +1,10 @@
+"""Internal helpers for building DynamoDB expression payloads.
+
+These functions convert high-level condition and projection inputs into the
+request fragments expected by boto/aioboto3. They are shared across read and
+write APIs so placeholder handling stays consistent.
+"""
+
 from __future__ import annotations
 
 from typing import Any, TypedDict
@@ -13,13 +20,6 @@ from aiodynamodb.projection import ProjectionExpressionArg, ProjectionExpression
 type ConditionExpressionT = str | None
 type ExpressionAttributeNamesT = dict[str, str] | None
 type ExpressionAttributeValuesT = dict[str, UniversalAttributeValueTypeDef] | None
-
-"""Internal helpers for building DynamoDB expression payloads.
-
-These functions convert high-level condition and projection inputs into the
-request fragments expected by boto/aioboto3. They are shared across read and
-write APIs so placeholder handling stays consistent.
-"""
 
 
 class ConditionExpression(TypedDict):
