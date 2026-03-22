@@ -37,6 +37,7 @@ requires = ["uv_build>=0.9.28,<0.10.0"]
 
 [tool.ruff]
 line-length = 120
+preview = true
 target-version = "py312"
 
 [tool.ruff.lint]
@@ -50,8 +51,8 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["src/aiodynamodb"]
 command_line = "-m pytest"
+source = ["src/aiodynamodb"]
 
 [tool.coverage.report]
 show_missing = true
