@@ -12,10 +12,10 @@ dependencies = [
 ]
 
 description = "Async DynamoDB ORM with Pydantic"
+dynamic = ["version"]
 name = "aiodynamodb"
 readme = "README.md"
 requires-python = ">=3.12"
-version = "0.0.0"
 
 [project.optional-dependencies]
 testing = [
@@ -24,8 +24,11 @@ testing = [
 ]
 
 [build-system]
-build-backend = "uv_build"
-requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "hatchling.build"
+requires = ["hatchling", "hatch-vcs"]
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.ruff]
 line-length = 120
@@ -55,6 +58,11 @@ check_untyped_defs = true
 python_version = "3.12"
 warn_return_any = false
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+# perf-dev optional dependencies — only present when that group is installed
+module = ["matplotlib", "matplotlib.*", "numpy", "pyinstrument"]
+ignore_missing_imports = true
 
 [dependency-groups]
 # dependency groups are for local development only
