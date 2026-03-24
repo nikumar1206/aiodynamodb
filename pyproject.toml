@@ -81,3 +81,4 @@ perf-dev = [
   "numpy>=2.4.3",
   "pyinstrument>=5.1.2",
 ]
+docs = ["zensical"]
