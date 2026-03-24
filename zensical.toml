@@ -30,7 +30,7 @@ repo_name = "nikumar1206/aiodynamodb"
 repo_url = "https://github.com/nikumar1206/aiodynamodb"
 site_description = "Async DynamoDB ORM with Pydantic"
 site_name = "aiodynamodb"
-site_url = "https://nikumar1206.github.io/aiodynamodb"
+site_url = "https://aiodynamodb.com"
 
 [project.theme]
 features = [
