@@ -12,3 +12,6 @@ wheels/
 /.idea/
 /agent.md
 /.coverage
+
+# Zensical / MkDocs build output
+site/
