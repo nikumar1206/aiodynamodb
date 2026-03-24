@@ -1,0 +1,50 @@
+[project]
+docs_dir = "docs"
+edit_uri = "edit/main/docs/"
+nav = [
+  {"Home" = "index.md"},
+  {"Getting Started" = ["getting-started/index.md", "getting-started/quickstart.md"]},
+  {"Guides" = [
+    "guides/defining-models.md",
+    "guides/indexes.md",
+    "guides/crud.md",
+    "guides/update.md",
+    "guides/query.md",
+    "guides/transactions.md",
+    "guides/batch.md",
+    "guides/table-lifecycle.md",
+    "guides/projections.md",
+    "guides/custom-types.md",
+    "guides/exceptions.md",
+    "guides/testing.md",
+  ]},
+  {"API Reference" = [
+    "api-reference/client.md",
+    "api-reference/models.md",
+    "api-reference/updates.md",
+    "api-reference/projection.md",
+    "api-reference/types.md",
+  ]},
+]
+repo_name = "nikumar1206/aiodynamodb"
+repo_url = "https://github.com/nikumar1206/aiodynamodb"
+site_description = "Async DynamoDB ORM with Pydantic"
+site_name = "aiodynamodb"
+site_url = "https://nikumar1206.github.io/aiodynamodb"
+
+[project.theme]
+features = [
+  "navigation.instant",
+  "navigation.instant.prefetch",
+  "navigation.instant.progress",
+  "navigation.tracking",
+  "navigation.sections",
+  "navigation.path",
+  "navigation.footer",
+  "navigation.top",
+  "toc.follow",
+  "search.highlight",
+  "content.action.edit",
+  "content.action.view",
+]
+variant = "modern"
