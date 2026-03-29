@@ -10,6 +10,7 @@ nav = [
     "guides/crud.md",
     "guides/update.md",
     "guides/query.md",
+    "guides/scan.md",
     "guides/transactions.md",
     "guides/batch.md",
     "guides/table-lifecycle.md",

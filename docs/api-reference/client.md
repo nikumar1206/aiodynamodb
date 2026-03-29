@@ -156,6 +156,27 @@ Async generator. Yields `QueryResult[T]` pages. Automatically follows `LastEvalu
 
 ---
 
+### `scan`
+
+```python
+async def scan(
+    self,
+    model: type[T],
+    *,
+    index_name: str | None = None,
+    limit: int | None = None,
+    filter_expression: ConditionBase | None = None,
+    exclusive_start_key: dict | None = None,
+    consistent_read: bool = False,
+    return_consumed_capacity: bool = False,
+    projection_expression: list[ProjectionAttr] | None = None,
+) -> AsyncIterator[QueryResult[T]]
+```
+
+Async generator. Yields `QueryResult[T]` pages for a full-table (or full-index) scan. Automatically follows `LastEvaluatedKey` to fetch all pages. See [Scan Operations](../guides/scan.md).
+
+---
+
 ### `transact_get`
 
 ```python
