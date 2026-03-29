@@ -6,6 +6,7 @@ The workflow sets this via env; for local runs export it yourself or start
 LocalStack and let the default below kick in.
 """
 
+import contextlib
 import os
 from collections.abc import AsyncGenerator
 
@@ -61,7 +62,5 @@ async def db() -> AsyncGenerator[DynamoDB]:
             yield client
         finally:
             for model in (User, Order):
-                try:
+                with contextlib.suppress(Exception):
                     await client.delete_table(model)
-                except Exception:
-                    pass

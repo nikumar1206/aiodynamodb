@@ -1,8 +1,7 @@
 import pytest
 from boto3.dynamodb.conditions import Attr
 
-from aiodynamodb import TransactConditionCheck, TransactDelete, TransactGet, TransactPut
-from aiodynamodb import UpdateAttr
+from aiodynamodb import TransactConditionCheck, TransactDelete, TransactGet, TransactPut, UpdateAttr
 from aiodynamodb.models import TransactUpdate
 from tests.integration.conftest import User
 
