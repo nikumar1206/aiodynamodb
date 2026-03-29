@@ -1,6 +1,6 @@
 from boto3.dynamodb.conditions import Attr, Key
 
-from tests.integration.conftest import Order
+from tests.integration.conftest import Event, Order, Product
 
 
 async def test_gsi_query_by_hash_key(db):
@@ -77,36 +77,40 @@ async def test_gsi_query_with_filter(db):
     assert items[0].order_id == "o1"
 
 
-async def test_lsi_query(db):
-    await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
-    await db.put(Order(order_id="o1", created_at="2026-01-02", total=50))
-    await db.put(Order(order_id="o1", created_at="2026-01-03", total=200))
+async def test_lsi_query(db_event):
+    # priority is the LSI range key; timestamp is the table range key.
+    # The key condition on priority is only satisfiable via the LSI — querying
+    # the base table with Key("priority").gte(...) would be rejected by DynamoDB.
+    await db_event.put(Event(event_id="e1", timestamp="2026-01-01T10:00:00", priority=1, message="low"))
+    await db_event.put(Event(event_id="e1", timestamp="2026-01-02T10:00:00", priority=5, message="high"))
+    await db_event.put(Event(event_id="e1", timestamp="2026-01-03T10:00:00", priority=3, message="medium"))
+    await db_event.put(Event(event_id="e2", timestamp="2026-01-01T10:00:00", priority=10, message="other"))
 
     items = [
         item
-        async for page in db.query(
-            Order,
-            index_name="created_idx",
-            key_condition_expression=Key("order_id").eq("o1"),
-            scan_index_forward=True,
+        async for page in db_event.query(
+            Event,
+            index_name="priority_idx",
+            key_condition_expression=Key("event_id").eq("e1") & Key("priority").gte(3),
         )
         for item in page.items
     ]
 
-    assert len(items) == 3
-    dates = [i.created_at for i in items]
-    assert dates == sorted(dates)
+    assert len(items) == 2
+    assert all(i.priority >= 3 for i in items)
+    assert all(i.event_id == "e1" for i in items)
+    assert {i.message for i in items} == {"high", "medium"}
 
 
-async def test_lsi_query_consistent_read(db):
-    await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
+async def test_lsi_query_consistent_read(db_event):
+    await db_event.put(Event(event_id="e1", timestamp="2026-01-01T10:00:00", priority=1))
 
     items = [
         item
-        async for page in db.query(
-            Order,
-            index_name="created_idx",
-            key_condition_expression=Key("order_id").eq("o1"),
+        async for page in db_event.query(
+            Event,
+            index_name="priority_idx",
+            key_condition_expression=Key("event_id").eq("e1"),
             consistent_read=True,
         )
         for item in page.items
@@ -123,3 +127,34 @@ async def test_gsi_scan(db):
 
     assert len(items) == 2
     assert {i.status for i in items} == {"shipped", "pending"}
+
+
+async def test_sparse_gsi_excludes_items_without_key(db_product):
+    # p1 and p3 have a category and appear in the GSI; p2 does not and must be absent.
+    await db_product.put(Product(product_id="p1", name="Widget", category="electronics"))
+    await db_product.put(Product(product_id="p2", name="Unknown"))
+    await db_product.put(Product(product_id="p3", name="Gadget", category="electronics"))
+
+    items = [
+        item
+        async for page in db_product.query(
+            Product,
+            index_name="category_idx",
+            key_condition_expression=Key("category").eq("electronics"),
+        )
+        for item in page.items
+    ]
+
+    assert len(items) == 2
+    assert {i.product_id for i in items} == {"p1", "p3"}
+
+
+async def test_sparse_gsi_scan_excludes_items_without_key(db_product):
+    await db_product.put(Product(product_id="p1", name="Widget", category="electronics"))
+    await db_product.put(Product(product_id="p2", name="Unknown"))
+    await db_product.put(Product(product_id="p3", name="Gadget", category="books"))
+
+    items = [item async for page in db_product.scan(Product, index_name="category_idx") for item in page.items]
+
+    assert len(items) == 2
+    assert {i.product_id for i in items} == {"p1", "p3"}

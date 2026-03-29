@@ -72,3 +72,15 @@ async def test_consistent_read(db):
     fetched = await db.get(User, hash_key="u1", consistent_reads=True)
     assert fetched is not None
     assert fetched.name == "Alice"
+
+
+async def test_delete_composite_key(db):
+    # Two orders sharing the same hash key but different range keys.
+    await db.put(Order(order_id="o1", created_at="2026-01-01", total=100))
+    await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
+
+    # Delete only the first one; the second must remain untouched.
+    await db.delete(Order(order_id="o1", created_at="2026-01-01", total=100))
+
+    assert await db.get(Order, hash_key="o1", range_key="2026-01-01") is None
+    assert await db.get(Order, hash_key="o1", range_key="2026-01-02") is not None

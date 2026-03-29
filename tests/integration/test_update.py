@@ -125,3 +125,21 @@ async def test_update_set_and_remove_in_one_call(db):
     assert fetched.name == "Bob"
     assert fetched.email is None
     assert fetched.age == 30  # untouched
+
+
+async def test_update_returns_all_old(db):
+    await db.put(User(user_id="u1", name="Alice", age=20, email="alice@example.com"))
+    old = await db.update(
+        User,
+        hash_key="u1",
+        update_expression={UpdateAttr("name").set("Bob"), UpdateAttr("age").set(99)},
+        return_values="ALL_OLD",
+    )
+    assert old is not None
+    assert old.name == "Alice"
+    assert old.age == 20
+    assert old.email == "alice@example.com"
+    # Confirm the update was still applied.
+    current = await db.get(User, hash_key="u1")
+    assert current.name == "Bob"
+    assert current.age == 99

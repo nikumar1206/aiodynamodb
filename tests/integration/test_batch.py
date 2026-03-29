@@ -47,7 +47,8 @@ async def test_batch_get_all_items(db):
 
 
 async def test_batch_get_partial_miss(db):
-    """DynamoDB silently omits missing keys — no error raised."""
+    # DynamoDB silently omits missing keys — no error raised and they do NOT
+    # appear in unprocessed_keys (that field is for throttled keys only).
     await db.put(User(user_id="u1", name="Alice"))
 
     result = await db.batch_get([
@@ -57,6 +58,7 @@ async def test_batch_get_partial_miss(db):
 
     assert len(result.items[User]) == 1
     assert result.items[User][0].user_id == "u1"
+    assert result.unprocessed_keys == {}
 
 
 async def test_batch_get_all_missing(db):
