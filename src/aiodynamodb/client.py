@@ -403,6 +403,74 @@ class DynamoDB:
                 break
             query_args["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
+    async def scan[T: DynamoModel](
+        self,
+        model: type[T],
+        *,
+        index_name: str | None = None,
+        limit: int | None = None,
+        filter_expression: ConditionBase | None = None,
+        exclusive_start_key: dict[str, TableAttributeValueTypeDef] | None = None,
+        consistent_read: bool = False,
+        return_consumed_capacity: bool = False,
+        projection_expression: ProjectionExpressionArg | None = None,
+    ) -> AsyncIterator[QueryResult[T]]:
+        """Scan all items in a table (or index) and yield paginated results.
+
+        Unlike ``query``, scan reads every item in the table and applies
+        ``filter_expression`` after the read. Use sparingly on large tables.
+
+        Args:
+            model: ``DynamoModel`` subclass mapped to the target table.
+            index_name: Optional GSI or LSI name to scan.
+            limit: Maximum number of items to evaluate per page.
+            filter_expression: Optional attribute filter applied after the scan.
+            exclusive_start_key: Pagination token from a previous page.
+            consistent_read: Strongly consistent reads (not supported on GSIs).
+            return_consumed_capacity: Include consumed capacity in the response.
+            projection_expression: Optional list of ``ProjectionAttr(...)``
+                paths to project.
+
+        Yields:
+            ``QueryResult`` pages containing validated model instances.
+        """
+        meta = model.Meta
+
+        scan_args: dict[str, Any] = {"ConsistentRead": consistent_read}
+        if index_name is not None:
+            scan_args["IndexName"] = index_name
+        if limit is not None:
+            scan_args["Limit"] = limit
+        if exclusive_start_key is not None:
+            scan_args["ExclusiveStartKey"] = exclusive_start_key
+        if return_consumed_capacity:
+            scan_args["ReturnConsumedCapacity"] = "TOTAL"
+
+        condition_builder = CustomConditionExpressionBuilder(model)
+        _add_filter_expressions(model, filter_expression, query_args=scan_args, builder=condition_builder)
+
+        projection_payload = _projection_expression(model, projection_expression)
+        if projection_payload:
+            scan_args["ProjectionExpression"] = projection_payload["ProjectionExpression"]
+            merged_names = _merge_expression_attribute_names(
+                scan_args.get("ExpressionAttributeNames"),
+                projection_payload.get("ExpressionAttributeNames"),
+            )
+            if merged_names:
+                scan_args["ExpressionAttributeNames"] = merged_names
+
+        table = await self._table(meta.table_name)
+
+        while True:
+            page = await table.scan(**scan_args)
+            yield QueryResult(
+                items=[_to_model(item, model) for item in page.get("Items", [])],
+                last_evaluated_key=page.get("LastEvaluatedKey"),
+            )
+            if "LastEvaluatedKey" not in page:
+                break
+            scan_args["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+
     async def transact_get[T: DynamoModel](
         self, requests: list[TransactGet[T]], *, return_consumed_capacity=False
     ) -> list[T | None]:
