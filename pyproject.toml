@@ -61,8 +61,8 @@ warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
 # perf-dev optional dependencies — only present when that group is installed
-module = ["matplotlib", "matplotlib.*", "numpy", "pyinstrument"]
 ignore_missing_imports = true
+module = ["matplotlib", "matplotlib.*", "numpy", "pyinstrument"]
 
 [dependency-groups]
 # dependency groups are for local development only
@@ -75,10 +75,10 @@ dev = [
   "pytest-asyncio>=1.3.0",
   "ruff>=0.14.14",
 ]
+docs = ["zensical==0.0.30"]
 perf-dev = [
   "aiomoto>=0.3.0",
   "matplotlib>=3.10.8",
   "numpy>=2.4.3",
   "pyinstrument>=5.1.2",
 ]
-docs = ["zensical"]

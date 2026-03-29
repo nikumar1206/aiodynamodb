@@ -62,6 +62,7 @@ async def main() -> None:
 
         # Update a field
         from aiodynamodb import UpdateAttr
+
         updated = await db.update(
             User,
             hash_key="u1",

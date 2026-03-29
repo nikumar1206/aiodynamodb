@@ -103,6 +103,7 @@ Full example:
 ```python
 from datetime import datetime
 
+
 @table("orders", hash_key="order_id", range_key="created_at")
 class ComplexOrder(DynamoModel):
     order_id: str

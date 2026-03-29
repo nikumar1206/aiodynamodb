@@ -1,0 +1,53 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    branches: [main, release, release/**]
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Start LocalStack
+        uses: LocalStack/setup-localstack@v0.2.3
+        with:
+          image-tag: "latest"
+          install-awslocal: "true"
+          use-pro: "true"
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync --extra testing
+
+      - name: Run integration tests
+        run: uv run pytest tests/integration -v --tb=short
+        env:
+          AWS_ENDPOINT_URL: http://localhost:4566
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+
+      - name: Collect LocalStack logs on failure
+        if: failure()
+        run: localstack logs | tee localstack.log
+
+      - name: Upload LocalStack logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: localstack-logs
+          path: localstack.log

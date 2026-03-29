@@ -9,13 +9,11 @@ Write up to **25 operations** per call using DynamoDB `batch_write_item`. Suppor
 ```python
 from aiodynamodb import BatchDelete, BatchPut
 
-result = await db.batch_write(
-    [
-        BatchPut(User(user_id="u1", name="Alice")),
-        BatchPut(User(user_id="u2", name="Bob")),
-        BatchDelete(User, hash_key="u3"),
-    ]
-)
+result = await db.batch_write([
+    BatchPut(User(user_id="u1", name="Alice")),
+    BatchPut(User(user_id="u2", name="Bob")),
+    BatchDelete(User, hash_key="u3"),
+])
 print(result.unprocessed_items)  # {} if all succeeded
 ```
 
@@ -68,15 +66,13 @@ Read up to **100 items** per call using DynamoDB `batch_get_item`. Results are g
 ```python
 from aiodynamodb import BatchGet, ProjectionAttr
 
-result = await db.batch_get(
-    [
-        BatchGet(User, hash_key="u1"),
-        BatchGet(User, hash_key="u2", projection_expression=[ProjectionAttr("user_id")]),
-        BatchGet(Order, hash_key="o1", range_key="2026-01-01T00:00:00"),
-    ]
-)
+result = await db.batch_get([
+    BatchGet(User, hash_key="u1"),
+    BatchGet(User, hash_key="u2", projection_expression=[ProjectionAttr("user_id")]),
+    BatchGet(Order, hash_key="o1", range_key="2026-01-01T00:00:00"),
+])
 
-users = result.items[User]   # list[User]
+users = result.items[User]  # list[User]
 orders = result.items[Order]  # list[Order]
 print(result.unprocessed_keys)  # {} if all succeeded
 ```

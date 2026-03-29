@@ -102,17 +102,15 @@ Read up to **100 items atomically** across one or more tables. Results come back
 ```python
 from aiodynamodb import ProjectionAttr, TransactGet
 
-items = await db.transact_get(
-    [
-        TransactGet(User, hash_key="u1"),
-        TransactGet(User, hash_key="u2", projection_expression=[ProjectionAttr("user_id")]),
-        TransactGet(Order, hash_key="o1", range_key="2026-01-01T00:00:00"),
-    ]
-)
+items = await db.transact_get([
+    TransactGet(User, hash_key="u1"),
+    TransactGet(User, hash_key="u2", projection_expression=[ProjectionAttr("user_id")]),
+    TransactGet(Order, hash_key="o1", range_key="2026-01-01T00:00:00"),
+])
 
-user_1 = items[0]   # User | None
-user_2 = items[1]   # User | None
-order  = items[2]   # Order | None
+user_1 = items[0]  # User | None
+user_2 = items[1]  # User | None
+order = items[2]  # Order | None
 ```
 
 `transact_get_items` is always **strongly consistent** — there is no per-item consistency setting in the DynamoDB API.

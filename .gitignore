@@ -15,3 +15,4 @@ wheels/
 
 # Zensical / MkDocs build output
 site/
+scripts/

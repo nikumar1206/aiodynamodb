@@ -75,11 +75,11 @@ class Address(BaseModel):
 @table("profiles", hash_key="profile_id")
 class Profile(DynamoModel):
     profile_id: str
-    created_at: Timestamp          # stored as Unix seconds integer
-    address: Address               # stored as a DynamoDB Map
-    tags: list[str]                # stored as a DynamoDB List
-    metadata: JSONStr[Address]     # stored as a JSON string in DynamoDB
-    score: float                   # stored as Number; float → Decimal handled automatically
+    created_at: Timestamp  # stored as Unix seconds integer
+    address: Address  # stored as a DynamoDB Map
+    tags: list[str]  # stored as a DynamoDB List
+    metadata: JSONStr[Address]  # stored as a JSON string in DynamoDB
+    score: float  # stored as Number; float → Decimal handled automatically
 ```
 
 ## What `@table` does
@@ -87,11 +87,11 @@ class Profile(DynamoModel):
 The decorator attaches a `Meta` class variable (`TableMeta`) to your model:
 
 ```python
-User.Meta.table_name          # "users"
-User.Meta.hash_key            # "user_id"
-User.Meta.range_key           # None
+User.Meta.table_name  # "users"
+User.Meta.hash_key  # "user_id"
+User.Meta.range_key  # None
 User.Meta.global_secondary_indexes  # {}
-User.Meta.local_secondary_indexes   # {}
+User.Meta.local_secondary_indexes  # {}
 ```
 
 It also computes `_has_float_fields` once at decoration time — a cached flag used to skip the float → Decimal conversion traversal for models that contain no float fields, improving serialization performance.

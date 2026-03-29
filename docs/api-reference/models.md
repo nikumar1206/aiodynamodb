@@ -9,7 +9,7 @@ Base class for all table-mapped models. Inherits from Pydantic `BaseModel`.
 
 ```python
 class DynamoModel(BaseModel):
-    Meta: ClassVar[TableMeta]          # set by @table()
+    Meta: ClassVar[TableMeta]  # set by @table()
     _has_float_fields: ClassVar[bool]  # set by @table(), used for float→Decimal optimization
 ```
 
@@ -152,7 +152,7 @@ class TransactDelete[T: DynamoModel]:
 class TransactConditionCheck[T: DynamoModel]:
     model: type[T]
     hash_key: KeyT
-    condition_expression: ConditionBase        # required (no default)
+    condition_expression: ConditionBase  # required (no default)
     range_key: KeyT | None = None
 ```
 

@@ -25,11 +25,7 @@ async def test_scan_with_filter_expression(db):
     await db.put(Order(order_id="o2", created_at="2026-01-01", total=500))
     await db.put(Order(order_id="o3", created_at="2026-01-01", total=200))
 
-    items = [
-        item
-        async for page in db.scan(Order, filter_expression=Attr("total").gte(300))
-        for item in page.items
-    ]
+    items = [item async for page in db.scan(Order, filter_expression=Attr("total").gte(300)) for item in page.items]
 
     assert len(items) == 1
     assert items[0].order_id == "o2"
