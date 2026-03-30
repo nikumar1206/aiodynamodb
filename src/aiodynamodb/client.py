@@ -104,7 +104,7 @@ def _to_partial_model[T: DynamoModel](item: Raw, model: type[T]) -> T:
                 _partial_field_type_adapters[cache_key] = ta
             validated[fname] = ta.validate_python(item[fname])
         elif not finfo.is_required():
-            validated[fname] = finfo.default_factory() if finfo.default_factory is not None else finfo.default
+            validated[fname] = finfo.default_factory() if finfo.default_factory is not None else finfo.default  # type: ignore[call-arg]
         # required field absent from projection — left unset on the instance
     return model.model_construct(**validated)
 
