@@ -4,13 +4,11 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Literal, Self, assert_never, cast
 
-from pydantic import TypeAdapter
-from pydantic_core import PydanticUndefined
-
 import aioboto3
 from aioboto3.session import ResourceCreatorContext
 from aiobotocore.session import ClientCreatorContext
 from boto3.dynamodb.conditions import ConditionBase
+from pydantic import TypeAdapter
 from types_aiobotocore_dynamodb import DynamoDBServiceResource
 from types_aiobotocore_dynamodb.client import DynamoDBClient, Exceptions
 from types_aiobotocore_dynamodb.literals import BillingModeType, TableClassType
@@ -31,6 +29,7 @@ from types_aiobotocore_dynamodb.type_defs import (
 )
 
 from aiodynamodb._serializers import (
+    DESERIALIZER,
     SERIALIZER,
     _resolve_key_annotation,
     _serialize_custom_attribute,
@@ -433,7 +432,9 @@ class DynamoDB:
         while True:
             page = await table.query(**query_args)
             yield QueryResult(
-                items=[_to_model(item, model, _partial=projection_expression is not None) for item in page.get("Items", [])],
+                items=[
+                    _to_model(item, model, _partial=projection_expression is not None) for item in page.get("Items", [])
+                ],
                 last_evaluated_key=page.get("LastEvaluatedKey"),
             )
             if "LastEvaluatedKey" not in page:
@@ -501,7 +502,9 @@ class DynamoDB:
         while True:
             page = await table.scan(**scan_args)
             yield QueryResult(
-                items=[_to_model(item, model, _partial=projection_expression is not None) for item in page.get("Items", [])],
+                items=[
+                    _to_model(item, model, _partial=projection_expression is not None) for item in page.get("Items", [])
+                ],
                 last_evaluated_key=page.get("LastEvaluatedKey"),
             )
             if "LastEvaluatedKey" not in page:
