@@ -1,6 +1,6 @@
 # aiodynamodb
 
-**Async DynamoDB ORM with Pydantic.** Define your tables as Pydantic models, run fully async DynamoDB operations, and get typed results back — no boilerplate.
+**Interact with DynamoDB asynchronously in a Pythonic-interface.** Define your tables as Pydantic models, run fully async DynamoDB operations, and get typed results back.
 
 ```bash
 pip install aiodynamodb
@@ -10,21 +10,16 @@ pip install aiodynamodb
 
 ## Features
 
-- **Fully async** — built on `aioboto3`, designed for async Python applications
-- **Pydantic v2 models** — validation, type hints, and serialization out of the box
-- **`@table()` decorator** — attach table metadata to your model class in one line
-- **GSI and LSI support** — define and query secondary indexes declaratively
-- **Query pagination** — `query()` is an async generator yielding typed pages
-- **Conditional operations** — guard puts, deletes, and updates with condition expressions
-- **Transactional reads/writes** — up to 100 operations atomically
-- **Batch reads/writes** — efficient multi-item operations
-- **Table lifecycle helpers** — `create_table` / `delete_table` from model metadata
+- **Fully async** — built on `aioboto3` and designed for async Python applications (like FastAPI!).
+- **Pydantic** — DynamoDB tables are represented as Pydantic models, which handles data validation and serialization.
+- **Fully Typed** - All public and private methods are typed and mypy-compliant.
+- **Light and Performant** — Most overhead is due to network or data 
+- **Supports most DynamoDB APIs** - create/delete/query/scan table, get/put/delete item. Supports filter expressions, GSI, LSIs, and much more! If something isn't supported, drop a Github issue or a PR <3!
 - **Built-in test support** — `mock_dynamodb()` context manager via aiomoto
 
 ## Requirements
 
 - Python 3.12+
-- AWS credentials configured in your environment (or use `mock_dynamodb()` in tests)
 
 ## Quick example
 
@@ -52,4 +47,5 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-> **Not thread-safe.** `DynamoDB` holds internal async locks and connection state. Create one instance per async context — do not share across threads or use in synchronous code.
+> **Not thread-safe.** `DynamoDB` holds internal async locks and connection state. Create one instance per async context and do not share across threads.
+> **Avoid managing infra.** AiodynamoDB can definitely create/delete your Dynamo tables, but we would like to warn against creating infrastructure in application code. This is much better done through dedicated IaaC such as Terraform. Please only use the `create_table` or `delete_table` APIs for testing purposes.

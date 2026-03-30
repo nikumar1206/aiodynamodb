@@ -5,7 +5,7 @@ from boto3.dynamodb.conditions import Attr
 from pydantic_core import TzInfo
 
 from aiodynamodb import DynamoModel, ProjectionAttr, table
-from tests.entities import Basket, ComplexOrder, Item, Order, User
+from tests.unit.entities import Basket, ComplexOrder, Item, Order, User
 
 
 async def test_put_and_get(db):
@@ -117,7 +117,7 @@ async def test_get_supports_projection_expression_single_field(db):
 async def test_get_supports_specific_list_element(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo"), Item(qty=2, price=5.5, name="bar")])
 
-    created_at = datetime(2026, 1, 1, tzinfo=TzInfo(0))
+    created_at = datetime(2026, 1, 1, tzinfo=TzInfo())
     await db.put(ComplexOrder(order_id="o1", created_at=created_at, total=100, basket=basket))
 
     fetched = await db.get(ComplexOrder, hash_key="o1", range_key=created_at)

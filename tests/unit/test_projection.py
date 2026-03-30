@@ -1,5 +1,5 @@
 from aiodynamodb.projection import ProjectionAttr, ProjectionExpressionBuilder
-from tests.entities import ComplexOrder, User
+from tests.unit.entities import ComplexOrder, User
 
 
 def test_projection_builder_serializes_top_level_attributes():

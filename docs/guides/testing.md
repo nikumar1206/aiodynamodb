@@ -126,7 +126,7 @@ async def test_conditional_put_fails():
 async def test_query_pagination():
     async with mock_dynamodb(Order) as db:
         for i in range(5):
-            await db.put(Order(order_id="o1", created_at=f"2026-01-0{i+1}", total=i * 10))
+            await db.put(Order(order_id="o1", created_at=f"2026-01-0{i + 1}", total=i * 10))
 
         from boto3.dynamodb.conditions import Key
 

@@ -24,7 +24,7 @@ from aiodynamodb.custom_types import Timestamp, TimestampMillis
 @table("events", hash_key="event_id", range_key="occurred_at")
 class Event(DynamoModel):
     event_id: str
-    occurred_at: Timestamp       # stored as integer seconds in DynamoDB
+    occurred_at: Timestamp  # stored as integer seconds in DynamoDB
     processed_at: TimestampMillis | None = None
 
 
@@ -103,6 +103,6 @@ This means you can use `float` naturally in your models without thinking about `
 @table("products", hash_key="product_id")
 class Product(DynamoModel):
     product_id: str
-    price: float   # float → Decimal handled automatically on write
+    price: float  # float → Decimal handled automatically on write
     weight: float
 ```

@@ -37,12 +37,12 @@ class Order(DynamoModel):
 |---|---|---|
 | `name` | `str` | Index name (must be unique among GSIs on this table) |
 | `hash_key` | `str` | Partition key field for the index |
-| `range_key` | `str \| None` | Sort key field for the index (optional) |
+| `range_key` | `str | None` | Sort key field for the index (optional) |
 | `projection` | `str` | `"ALL"` (default), `"KEYS_ONLY"`, or `"INCLUDE"` |
-| `non_key_attributes` | `list[str] \| None` | Projected attributes when `projection="INCLUDE"` |
-| `provisioned_throughput` | `ProvisionedThroughputTypeDef \| None` | Throughput for provisioned mode |
-| `on_demand_throughput` | `OnDemandThroughputTypeDef \| None` | On-demand throughput configuration |
-| `warm_throughput` | `WarmThroughputTypeDef \| None` | Warm throughput configuration |
+| `non_key_attributes` | `list[str] | None` | Projected attributes when `projection="INCLUDE"` |
+| `provisioned_throughput` | `ProvisionedThroughputTypeDef | None` | Throughput for provisioned mode |
+| `on_demand_throughput` | `OnDemandThroughputTypeDef | None` | On-demand throughput configuration |
+| `warm_throughput` | `WarmThroughputTypeDef | None` | Warm throughput configuration |
 
 ## Local Secondary Index (LSI)
 
@@ -77,7 +77,7 @@ class Order(DynamoModel):
 | `name` | `str` | Index name (must be unique among LSIs on this table) |
 | `range_key` | `str` | Sort key field for the index |
 | `projection` | `str` | `"ALL"` (default), `"KEYS_ONLY"`, or `"INCLUDE"` |
-| `non_key_attributes` | `list[str] \| None` | Projected attributes when `projection="INCLUDE"` |
+| `non_key_attributes` | `list[str] | None` | Projected attributes when `projection="INCLUDE"` |
 
 ## Combining GSI and LSI
 

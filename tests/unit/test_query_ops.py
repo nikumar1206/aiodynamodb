@@ -3,7 +3,7 @@ from datetime import datetime
 from boto3.dynamodb.conditions import Attr, Key
 from pydantic_core import TzInfo
 
-from tests.entities import Basket, ComplexOrder, Item, Order
+from tests.unit.entities import Basket, ComplexOrder, Item, Order
 
 
 async def test_query_returns_paginated_results(db):
@@ -118,13 +118,13 @@ async def test_query_lsi_index(db):
 async def test_complex_item(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
     await db.put(
-        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)), total=100, basket=basket)
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo()), total=100, basket=basket)
     )
     await db.put(
-        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 2, tzinfo=TzInfo(0)), total=200, basket=basket)
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 2, tzinfo=TzInfo()), total=200, basket=basket)
     )
     await db.put(
-        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)), total=300, basket=basket)
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 3, tzinfo=TzInfo()), total=300, basket=basket)
     )
 
     filtered = []
@@ -140,13 +140,13 @@ async def test_complex_item(db):
     assert filtered == [
         ComplexOrder(
             order_id="o1",
-            created_at=datetime(2020, 1, 2, tzinfo=TzInfo(0)),
+            created_at=datetime(2020, 1, 2, tzinfo=TzInfo()),
             total=200,
             basket=Basket(items=[Item(qty=1, price=10.9, name="foo")]),
         ),
         ComplexOrder(
             order_id="o1",
-            created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
+            created_at=datetime(2020, 1, 3, tzinfo=TzInfo()),
             total=300,
             basket=Basket(items=[Item(qty=1, price=10.9, name="foo")]),
         ),
@@ -157,20 +157,20 @@ async def test_query_serializes_custom_key_condition_values(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
 
     await db.put(
-        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)), total=100, basket=basket)
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo()), total=100, basket=basket)
     )
     await db.put(
-        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 2, tzinfo=TzInfo(0)), total=200, basket=basket)
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 2, tzinfo=TzInfo()), total=200, basket=basket)
     )
     await db.put(
-        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)), total=300, basket=basket)
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 3, tzinfo=TzInfo()), total=300, basket=basket)
     )
 
     filtered = []
     async for page in db.query(
         ComplexOrder,
         key_condition_expression=(
-            Key("order_id").eq("o1") & Key("created_at").gte(datetime(2020, 1, 2, tzinfo=TzInfo(0)))
+            Key("order_id").eq("o1") & Key("created_at").gte(datetime(2020, 1, 2, tzinfo=TzInfo()))
         ),
         scan_index_forward=True,
     ):
@@ -201,7 +201,7 @@ async def test_query_supports_projection_expression_with_filter(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
 
     await db.put(
-        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)), total=100, basket=basket)
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo()), total=100, basket=basket)
     )
 
     projected = []
@@ -221,13 +221,13 @@ async def test_deep_filter(db):
     basket2 = Basket(items=[Item(qty=2, price=10.9, name="foo")])
 
     await db.put(
-        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)), total=100, basket=basket)
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo()), total=100, basket=basket)
     )
     await db.put(
-        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 2, tzinfo=TzInfo(0)), total=200, basket=basket)
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 2, tzinfo=TzInfo()), total=200, basket=basket)
     )
     await db.put(
-        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)), total=300, basket=basket2)
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 3, tzinfo=TzInfo()), total=300, basket=basket2)
     )
 
     filtered = []

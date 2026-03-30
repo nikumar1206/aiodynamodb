@@ -14,6 +14,7 @@ class User(DynamoModel):
     name: str
     email: str | None = None
 ```
+Under the hood `DynamoModel` is a small abstraction over pydantic's `BaseModel`. The `@table` decorator adds some additional ClassVars to support DynamoDB functionality.
 
 ## Create a client
 
@@ -62,6 +63,7 @@ async def main() -> None:
 
         # Update a field
         from aiodynamodb import UpdateAttr
+
         updated = await db.update(
             User,
             hash_key="u1",

@@ -9,13 +9,11 @@ Write up to **25 operations** per call using DynamoDB `batch_write_item`. Suppor
 ```python
 from aiodynamodb import BatchDelete, BatchPut
 
-result = await db.batch_write(
-    [
-        BatchPut(User(user_id="u1", name="Alice")),
-        BatchPut(User(user_id="u2", name="Bob")),
-        BatchDelete(User, hash_key="u3"),
-    ]
-)
+result = await db.batch_write([
+    BatchPut(User(user_id="u1", name="Alice")),
+    BatchPut(User(user_id="u2", name="Bob")),
+    BatchDelete(User, hash_key="u3"),
+])
 print(result.unprocessed_items)  # {} if all succeeded
 ```
 
@@ -51,13 +49,13 @@ BatchDelete(Order, hash_key="o1", range_key="2026-01-01T00:00:00")
 |---|---|---|
 | `model` | `type[T]` | Model class |
 | `hash_key` | `KeyT` | Partition key value |
-| `range_key` | `KeyT \| None` | Sort key value (optional) |
+| `range_key` | `KeyT | None` | Sort key value (optional) |
 
 ### `batch_write` parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `operations` | `list[BatchPut \| BatchDelete]` | — | Operations to execute |
+| `operations` | `list[BatchPut | BatchDelete]` | — | Operations to execute |
 | `return_consumed_capacity` | `bool` | `False` | Include consumed capacity |
 | `return_item_collection_metrics` | `bool` | `False` | Include item collection metrics |
 
@@ -68,15 +66,13 @@ Read up to **100 items** per call using DynamoDB `batch_get_item`. Results are g
 ```python
 from aiodynamodb import BatchGet, ProjectionAttr
 
-result = await db.batch_get(
-    [
-        BatchGet(User, hash_key="u1"),
-        BatchGet(User, hash_key="u2", projection_expression=[ProjectionAttr("user_id")]),
-        BatchGet(Order, hash_key="o1", range_key="2026-01-01T00:00:00"),
-    ]
-)
+result = await db.batch_get([
+    BatchGet(User, hash_key="u1"),
+    BatchGet(User, hash_key="u2", projection_expression=[ProjectionAttr("user_id")]),
+    BatchGet(Order, hash_key="o1", range_key="2026-01-01T00:00:00"),
+])
 
-users = result.items[User]   # list[User]
+users = result.items[User]  # list[User]
 orders = result.items[Order]  # list[Order]
 print(result.unprocessed_keys)  # {} if all succeeded
 ```
@@ -89,9 +85,9 @@ Items are returned in an **unordered** dict grouped by model class — the order
 |---|---|---|---|
 | `model` | `type[T]` | — | Model class |
 | `hash_key` | `KeyT` | — | Partition key value |
-| `range_key` | `KeyT \| None` | `None` | Sort key value (optional) |
+| `range_key` | `KeyT | None` | `None` | Sort key value (optional) |
 | `consistent_read` | `bool` | `False` | Strongly consistent read |
-| `projection_expression` | `list[ProjectionAttr] \| None` | `None` | Fields to project |
+| `projection_expression` | `list[ProjectionAttr] | None` | `None` | Fields to project |
 
 > **Note:** `consistent_read` must be the same for all requests targeting the same table. Mixed values raise `ValueError`.
 

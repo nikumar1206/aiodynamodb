@@ -5,7 +5,10 @@ from datetime import datetime
 from typing import Any, Literal, Self, assert_never, cast
 
 import aioboto3
+from aioboto3.session import ResourceCreatorContext
+from aiobotocore.session import ClientCreatorContext
 from boto3.dynamodb.conditions import ConditionBase
+from pydantic import TypeAdapter
 from types_aiobotocore_dynamodb import DynamoDBServiceResource
 from types_aiobotocore_dynamodb.client import DynamoDBClient, Exceptions
 from types_aiobotocore_dynamodb.literals import BillingModeType, TableClassType
@@ -26,6 +29,7 @@ from types_aiobotocore_dynamodb.type_defs import (
 )
 
 from aiodynamodb._serializers import (
+    DESERIALIZER,
     SERIALIZER,
     _resolve_key_annotation,
     _serialize_custom_attribute,
@@ -79,9 +83,40 @@ type TransactWriteOperation = (
 type BatchWriteOperation = BatchPut[DynamoModel] | BatchDelete[DynamoModel]
 
 
-def _to_model[T: DynamoModel](item: Raw, model: type[T], _is_raw_dynamo: bool = False) -> T:
+_partial_field_type_adapters: dict[tuple[type[DynamoModel], str], TypeAdapter[Any]] = {}
+
+
+def _to_partial_model[T: DynamoModel](item: Raw, model: type[T]) -> T:
+    """Construct a model from a partial item (e.g. a projected result).
+
+    Fields present in ``item`` are validated and coerced (so Decimal becomes
+    int, etc.).  Fields absent from ``item`` fall back to their declared
+    default; required fields with no default are simply left unset on the
+    resulting instance.
+    """
+    validated: dict[str, Any] = {}
+    for fname, finfo in model.model_fields.items():
+        if fname in item:
+            cache_key = (model, fname)
+            ta = _partial_field_type_adapters.get(cache_key)
+            if ta is None:
+                ta = TypeAdapter(finfo.annotation)
+                _partial_field_type_adapters[cache_key] = ta
+            validated[fname] = ta.validate_python(item[fname])
+        elif not finfo.is_required():
+            validated[fname] = finfo.default_factory() if finfo.default_factory is not None else finfo.default  # type: ignore[call-arg]
+        # required field absent from projection — left unset on the instance
+    return model.model_construct(**validated)
+
+
+def _to_model[T: DynamoModel](item: Raw, model: type[T], _is_raw_dynamo: bool = False, _partial: bool = False) -> T:
     if _is_raw_dynamo:
+        if _partial:
+            deserialized = {k: DESERIALIZER._to_dynamo(v) for k, v in item.items()}
+            return _to_partial_model(deserialized, model)
         return model.from_dynamo(item)
+    if _partial:
+        return _to_partial_model(item, model)
     return model.model_validate(item)
 
 
@@ -128,8 +163,8 @@ class DynamoDB:
         self._exceptions: Exceptions | None = None
         self._held_resource: DynamoDBServiceResource | None = None
         self._held_client: DynamoDBClient | None = None
-        self._resource_ctx: Any = None
-        self._client_ctx: Any = None
+        self._resource_ctx: ResourceCreatorContext[DynamoDBServiceResource] | None = None
+        self._client_ctx: ClientCreatorContext[DynamoDBClient] | None = None
         self._resource_lock: asyncio.Lock = asyncio.Lock()
         self._client_lock: asyncio.Lock = asyncio.Lock()
         self._table_cache: dict[str, Table] = {}
@@ -261,9 +296,9 @@ class DynamoDB:
             args.get("ExpressionAttributeNames"),
             _to_dynamo_compatible(built.expression_attribute_names),
         )
-        args["ExpressionAttributeValues"] = args.get("ExpressionAttributeValues", {}) | _to_dynamo_compatible(
-            built.expression_attribute_values
-        )
+        ev = args.get("ExpressionAttributeValues", {}) | _to_dynamo_compatible(built.expression_attribute_values)
+        if ev:
+            args["ExpressionAttributeValues"] = ev
 
         table = await self._table(model.Meta.table_name)
         response = await table.update_item(**args)
@@ -271,7 +306,8 @@ class DynamoDB:
         item = response.get("Attributes")
         if not item:
             return None
-        return _to_model(item, model)
+        _partial = return_values in ("UPDATED_NEW", "UPDATED_OLD")
+        return _to_model(item, model, _partial=_partial)
 
     async def get[T: DynamoModel](
         self,
@@ -312,7 +348,7 @@ class DynamoDB:
         item = resp.get("Item")
         if item is None:
             return None
-        return _to_model(item, model)
+        return _to_model(item, model, _partial=projection_expression is not None)
 
     async def query[T: DynamoModel](
         self,
@@ -376,7 +412,7 @@ class DynamoDB:
             query_args=query_args,
             builder=condition_builder,
         )
-        projection_payload = _projection_expression(model, projection_expression)
+        projection_payload = _projection_expression(model, projection_expression, builder=condition_builder)
         if projection_payload:
             query_args["ProjectionExpression"] = projection_payload["ProjectionExpression"]
             merged_names = _merge_expression_attribute_names(
@@ -396,12 +432,84 @@ class DynamoDB:
         while True:
             page = await table.query(**query_args)
             yield QueryResult(
-                items=[_to_model(item, model) for item in page.get("Items", [])],
+                items=[
+                    _to_model(item, model, _partial=projection_expression is not None) for item in page.get("Items", [])
+                ],
                 last_evaluated_key=page.get("LastEvaluatedKey"),
             )
             if "LastEvaluatedKey" not in page:
                 break
             query_args["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+
+    async def scan[T: DynamoModel](
+        self,
+        model: type[T],
+        *,
+        index_name: str | None = None,
+        limit: int | None = None,
+        filter_expression: ConditionBase | None = None,
+        exclusive_start_key: dict[str, TableAttributeValueTypeDef] | None = None,
+        consistent_read: bool = False,
+        return_consumed_capacity: bool = False,
+        projection_expression: ProjectionExpressionArg | None = None,
+    ) -> AsyncIterator[QueryResult[T]]:
+        """Scan all items in a table (or index) and yield paginated results.
+
+        Unlike ``query``, scan reads every item in the table and applies
+        ``filter_expression`` after the read. Use sparingly on large tables.
+
+        Args:
+            model: ``DynamoModel`` subclass mapped to the target table.
+            index_name: Optional GSI or LSI name to scan.
+            limit: Maximum number of items to evaluate per page.
+            filter_expression: Optional attribute filter applied after the scan.
+            exclusive_start_key: Pagination token from a previous page.
+            consistent_read: Strongly consistent reads (not supported on GSIs).
+            return_consumed_capacity: Include consumed capacity in the response.
+            projection_expression: Optional list of ``ProjectionAttr(...)``
+                paths to project.
+
+        Yields:
+            ``QueryResult`` pages containing validated model instances.
+        """
+        meta = model.Meta
+
+        scan_args: dict[str, Any] = {"ConsistentRead": consistent_read}
+        if index_name is not None:
+            scan_args["IndexName"] = index_name
+        if limit is not None:
+            scan_args["Limit"] = limit
+        if exclusive_start_key is not None:
+            scan_args["ExclusiveStartKey"] = exclusive_start_key
+        if return_consumed_capacity:
+            scan_args["ReturnConsumedCapacity"] = "TOTAL"
+
+        condition_builder = CustomConditionExpressionBuilder(model)
+        _add_filter_expressions(model, filter_expression, query_args=scan_args, builder=condition_builder)
+
+        projection_payload = _projection_expression(model, projection_expression, builder=condition_builder)
+        if projection_payload:
+            scan_args["ProjectionExpression"] = projection_payload["ProjectionExpression"]
+            merged_names = _merge_expression_attribute_names(
+                scan_args.get("ExpressionAttributeNames"),
+                projection_payload.get("ExpressionAttributeNames"),
+            )
+            if merged_names:
+                scan_args["ExpressionAttributeNames"] = merged_names
+
+        table = await self._table(meta.table_name)
+
+        while True:
+            page = await table.scan(**scan_args)
+            yield QueryResult(
+                items=[
+                    _to_model(item, model, _partial=projection_expression is not None) for item in page.get("Items", [])
+                ],
+                last_evaluated_key=page.get("LastEvaluatedKey"),
+            )
+            if "LastEvaluatedKey" not in page:
+                break
+            scan_args["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
     async def transact_get[T: DynamoModel](
         self, requests: list[TransactGet[T]], *, return_consumed_capacity=False
@@ -518,13 +626,9 @@ class DynamoDB:
                         built.expression_attribute_names,
                     )
                     # merge items
-                    update_item["ExpressionAttributeValues"] = (
-                        update_item.get("ExpressionAttributeValues", {}) | built.expression_attribute_values
-                    )
-
-                    update_item["ExpressionAttributeValues"] = _to_dynamo_expression_values(
-                        update_item["ExpressionAttributeValues"]
-                    )
+                    ev = update_item.get("ExpressionAttributeValues", {}) | built.expression_attribute_values
+                    if ev:
+                        update_item["ExpressionAttributeValues"] = _to_dynamo_expression_values(ev)
 
                     transact_items.append({"Update": update_item})
 
@@ -560,6 +664,7 @@ class DynamoDB:
                 (`"TOTAL"` in DynamoDB request).
         """
         table_to_model: dict[str, type[DynamoModel]] = {}
+        tables_with_projection: set[str] = set()
         request_items: dict[str, dict[str, Any]] = {}
         for request in requests:
             table_name = request.model.Meta.table_name
@@ -575,6 +680,7 @@ class DynamoDB:
                     raise ValueError(f"Conflicting consistent_read values for table '{table_name}'.")
                 table_entry["ConsistentRead"] = True
             if request.projection_expression is not None:
+                tables_with_projection.add(table_name)
                 projection_payload = _projection_expression(
                     request.model,
                     request.projection_expression,
@@ -604,7 +710,8 @@ class DynamoDB:
             model = table_to_model.get(table_name)
             if model is None:
                 continue
-            parsed_items[model] = [_to_model(item, model, True) for item in items]
+            is_partial = table_name in tables_with_projection
+            parsed_items[model] = [_to_model(item, model, True, _partial=is_partial) for item in items]
         return BatchGetResult(
             items=parsed_items,
             unprocessed_keys=response.get("UnprocessedKeys", {}),

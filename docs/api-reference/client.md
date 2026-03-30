@@ -20,7 +20,7 @@ DynamoDB(
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `session` | `aioboto3.Session \| None` | `None` | Optional aioboto3 session. A new one is created if omitted. |
+| `session` | `aioboto3.Session | None` | `None` | Optional aioboto3 session. A new one is created if omitted. |
 | `hash_key_types` | `dict[Any, str]` | Built-in map | Mapping from Python type to DynamoDB attribute type (`"S"`, `"N"`, `"B"`). Override to add custom key types. |
 
 ### Context manager
@@ -153,6 +153,27 @@ async def query(
 ```
 
 Async generator. Yields `QueryResult[T]` pages. Automatically follows `LastEvaluatedKey` to fetch all pages.
+
+---
+
+### `scan`
+
+```python
+async def scan(
+    self,
+    model: type[T],
+    *,
+    index_name: str | None = None,
+    limit: int | None = None,
+    filter_expression: ConditionBase | None = None,
+    exclusive_start_key: dict | None = None,
+    consistent_read: bool = False,
+    return_consumed_capacity: bool = False,
+    projection_expression: list[ProjectionAttr] | None = None,
+) -> AsyncIterator[QueryResult[T]]
+```
+
+Async generator. Yields `QueryResult[T]` pages for a full-table (or full-index) scan. Automatically follows `LastEvaluatedKey` to fetch all pages. See [Scan Operations](../guides/scan.md).
 
 ---
 
