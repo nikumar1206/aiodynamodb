@@ -10,6 +10,7 @@ nav = [
     "guides/crud.md",
     "guides/update.md",
     "guides/query.md",
+    "guides/scan.md",
     "guides/transactions.md",
     "guides/batch.md",
     "guides/table-lifecycle.md",
@@ -17,6 +18,7 @@ nav = [
     "guides/custom-types.md",
     "guides/exceptions.md",
     "guides/testing.md",
+    "guides/fastapi.md",
   ]},
   {"API Reference" = [
     "api-reference/client.md",
@@ -46,5 +48,7 @@ features = [
   "search.highlight",
   "content.action.edit",
   "content.action.view",
+  "content.code.copy",
+  "content.code.select",
 ]
 variant = "modern"

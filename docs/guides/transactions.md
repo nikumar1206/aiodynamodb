@@ -91,7 +91,7 @@ TransactUpdate(
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `operations` | `list[...]` | — | List of `TransactPut`, `TransactDelete`, `TransactConditionCheck`, or `TransactUpdate` |
-| `client_request_token` | `str \| None` | `None` | Idempotency token (deduplicated within 10 minutes) |
+| `client_request_token` | `str | None` | `None` | Idempotency token (deduplicated within 10 minutes) |
 | `return_consumed_capacity` | `bool` | `False` | Include consumed capacity |
 | `return_item_collection_metrics` | `bool` | `False` | Include item collection metrics |
 
@@ -102,17 +102,15 @@ Read up to **100 items atomically** across one or more tables. Results come back
 ```python
 from aiodynamodb import ProjectionAttr, TransactGet
 
-items = await db.transact_get(
-    [
-        TransactGet(User, hash_key="u1"),
-        TransactGet(User, hash_key="u2", projection_expression=[ProjectionAttr("user_id")]),
-        TransactGet(Order, hash_key="o1", range_key="2026-01-01T00:00:00"),
-    ]
-)
+items = await db.transact_get([
+    TransactGet(User, hash_key="u1"),
+    TransactGet(User, hash_key="u2", projection_expression=[ProjectionAttr("user_id")]),
+    TransactGet(Order, hash_key="o1", range_key="2026-01-01T00:00:00"),
+])
 
-user_1 = items[0]   # User | None
-user_2 = items[1]   # User | None
-order  = items[2]   # Order | None
+user_1 = items[0]  # User | None
+user_2 = items[1]  # User | None
+order = items[2]  # Order | None
 ```
 
 `transact_get_items` is always **strongly consistent** — there is no per-item consistency setting in the DynamoDB API.
@@ -123,8 +121,8 @@ order  = items[2]   # Order | None
 |---|---|---|
 | `model` | `type[T]` | `DynamoModel` subclass |
 | `hash_key` | `KeyT` | Partition key value |
-| `range_key` | `KeyT \| None` | Sort key value (optional) |
-| `projection_expression` | `list[ProjectionAttr] \| None` | Fields to project |
+| `range_key` | `KeyT | None` | Sort key value (optional) |
+| `projection_expression` | `list[ProjectionAttr] | None` | Fields to project |
 
 ### `transact_get` parameters
 

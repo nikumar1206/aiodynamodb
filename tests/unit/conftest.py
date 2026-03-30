@@ -4,7 +4,7 @@ import pytest
 
 from aiodynamodb import DynamoDB
 from aiodynamodb.testing import mock_dynamodb
-from tests.entities import ComplexOrder, Order, User
+from tests.unit.entities import ComplexOrder, Order, User
 
 
 @pytest.fixture

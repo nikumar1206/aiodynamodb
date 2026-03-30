@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from aiodynamodb.conditions import CustomConditionExpressionBuilder
 from aiodynamodb.models import DynamoModel
-from aiodynamodb.projection import ProjectionExpressionArg, ProjectionExpressionBuilder
+from aiodynamodb.projection import BuiltProjectionExpression, ProjectionExpressionArg, ProjectionExpressionBuilder
 
 
 class ConditionExpression(TypedDict, total=False):
@@ -146,12 +146,23 @@ def _add_filter_expressions(
 def _projection_expression(
     model: type[DynamoModel],
     projection_expression: ProjectionExpressionArg | None,
+    builder: CustomConditionExpressionBuilder | None = None,
 ) -> ProjectionExpression:
-    """Build a request fragment for projection expressions."""
+    """Build a request fragment for projection expressions.
+
+    When ``builder`` is supplied (e.g. a shared condition-expression builder
+    from the same query/scan call), the projection builder's name-placeholder
+    counter is initialised to the builder's current count so that ``#n0`` etc.
+    never collide between the two expression fragments.
+    """
     if projection_expression is None:
         return {}
 
-    built = ProjectionExpressionBuilder(model).build_projection_expression(projection_expression)
+    proj_builder = ProjectionExpressionBuilder(model)
+    if builder is not None:
+        proj_builder._name_count = builder._name_count  # type: ignore[attr-defined]
+
+    built: BuiltProjectionExpression = proj_builder.build_projection_expression(projection_expression)
 
     payload: ProjectionExpression = {
         "ProjectionExpression": built.projection_expression,

@@ -1,12 +1,10 @@
 from datetime import datetime
 
-import pytest
-from botocore.exceptions import ClientError
 from pydantic_core import TzInfo
 
 from aiodynamodb import DynamoModel, UpdateAttr, table
 from aiodynamodb.custom_types import Timestamp
-from tests.entities import Basket, ComplexOrder, Item, User
+from tests.unit.entities import Basket, ComplexOrder, Item, User
 
 
 async def test_update_supports_high_level_update_expression(db):
@@ -31,7 +29,7 @@ async def test_update_serializes_timestamp_fields(db):
     await db.create_table(Event)
     await db.put(Event(event_id="e1"))
 
-    ts = datetime(2020, 1, 1, tzinfo=TzInfo(0))
+    ts = datetime(2020, 1, 1, tzinfo=TzInfo())
     updated = await db.update(
         Event,
         hash_key="e1",
@@ -44,7 +42,7 @@ async def test_update_serializes_timestamp_fields(db):
 
 async def test_update_supports_nested_field_paths(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
-    created_at = datetime(2020, 1, 1, tzinfo=TzInfo(0))
+    created_at = datetime(2020, 1, 1, tzinfo=TzInfo())
     await db.put(ComplexOrder(order_id="o1", created_at=created_at, total=100, basket=basket))
 
     updated = await db.update(
@@ -87,7 +85,7 @@ async def test_update_supports_atomic_counter_increment(db):
 
 async def test_update_supports_specific_indexed_list_element(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo"), Item(qty=2, price=5.5, name="bar")])
-    created_at = datetime(2020, 1, 1, tzinfo=TzInfo(0))
+    created_at = datetime(2020, 1, 1, tzinfo=TzInfo())
     await db.put(ComplexOrder(order_id="o1", created_at=created_at, total=100, basket=basket))
 
     updated = await db.update(
@@ -151,18 +149,20 @@ async def test_update_supports_remove_add_and_delete_actions(db):
 
     assert updated == CounterUser(user_id="u1", score=4, tags=None, email=None)
 
-    with pytest.raises(ClientError, match="ValidationException"):
-        await db.update(
-            CounterUser,
-            hash_key="u1",
-            update_expression={UpdateAttr("tags").add({"a", "b"})},
-            return_values="ALL_NEW",
-        )
+    # tags is absent (not NULL) — ADD on an absent set attribute creates it
+    after_add = await db.update(
+        CounterUser,
+        hash_key="u1",
+        update_expression={UpdateAttr("tags").add({"a", "b"})},
+        return_values="ALL_NEW",
+    )
+    assert after_add.tags == {"a", "b"}
 
-    with pytest.raises(ClientError, match="ValidationException"):
-        await db.update(
-            CounterUser,
-            hash_key="u1",
-            update_expression={UpdateAttr("tags").delete({"b"})},
-            return_values="ALL_NEW",
-        )
+    # DELETE removes elements from an existing set
+    after_delete = await db.update(
+        CounterUser,
+        hash_key="u1",
+        update_expression={UpdateAttr("tags").delete({"b"})},
+        return_values="ALL_NEW",
+    )
+    assert after_delete.tags == {"a"}

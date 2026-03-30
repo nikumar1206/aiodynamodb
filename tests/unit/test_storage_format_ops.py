@@ -6,7 +6,7 @@ from types_aiobotocore_dynamodb import DynamoDBClient
 
 from aiodynamodb import DynamoModel, table
 from aiodynamodb.custom_types import JSONStr, Timestamp, TimestampMillis
-from tests.entities import Basket, Item
+from tests.unit.entities import Basket, Item
 
 
 async def test_items_are_stored_in_the_correct_raw_format(db):
@@ -28,8 +28,8 @@ async def test_items_are_stored_in_the_correct_raw_format(db):
     await db.put(
         Complex(
             order_id="o1",
-            created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
-            created_at_milli=datetime(2020, 1, 3, microsecond=1000, tzinfo=TzInfo(0)),
+            created_at=datetime(2020, 1, 3, tzinfo=TzInfo()),
+            created_at_milli=datetime(2020, 1, 3, microsecond=1000, tzinfo=TzInfo()),
             total=300,
             json_str=JsonData(f1=False, f2="test"),
             basket=basket,
@@ -41,7 +41,7 @@ async def test_items_are_stored_in_the_correct_raw_format(db):
         meta = Complex.Meta
         key = {
             meta.hash_key: {"S": "o1"},
-            meta.range_key: {"N": str(int(datetime(2020, 1, 3, tzinfo=TzInfo(0)).timestamp()))},
+            meta.range_key: {"N": str(int(datetime(2020, 1, 3, tzinfo=TzInfo()).timestamp()))},
         }
 
         actual = await c.get_item(TableName=meta.table_name, Key=key)
@@ -56,12 +56,12 @@ async def test_items_are_stored_in_the_correct_raw_format(db):
     }
     assert actual["Item"] == expected_item
 
-    actual_item = await db.get(Complex, hash_key="o1", range_key=datetime(2020, 1, 3, tzinfo=TzInfo(0)))
+    actual_item = await db.get(Complex, hash_key="o1", range_key=datetime(2020, 1, 3, tzinfo=TzInfo()))
 
     assert actual_item == Complex(
         order_id="o1",
-        created_at=datetime(2020, 1, 3, tzinfo=TzInfo(0)),
-        created_at_milli=datetime(2020, 1, 3, microsecond=1000, tzinfo=TzInfo(0)),
+        created_at=datetime(2020, 1, 3, tzinfo=TzInfo()),
+        created_at_milli=datetime(2020, 1, 3, microsecond=1000, tzinfo=TzInfo()),
         json_str=JsonData(f1=False, f2="test"),
         total=300,
         basket=Basket(items=[Item(qty=1, price=10.9, name="foo")]),

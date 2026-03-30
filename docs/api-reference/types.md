@@ -58,6 +58,7 @@ class Address(BaseModel):
     street: str
     city: str
 
+
 @table("profiles", hash_key="profile_id")
 class Profile(DynamoModel):
     profile_id: str
