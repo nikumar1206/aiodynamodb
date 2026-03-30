@@ -1,7 +1,5 @@
 from datetime import datetime
 
-import pytest
-from botocore.exceptions import ClientError
 from pydantic_core import TzInfo
 
 from aiodynamodb import DynamoModel, UpdateAttr, table
@@ -151,18 +149,20 @@ async def test_update_supports_remove_add_and_delete_actions(db):
 
     assert updated == CounterUser(user_id="u1", score=4, tags=None, email=None)
 
-    with pytest.raises(ClientError, match="ValidationException"):
-        await db.update(
-            CounterUser,
-            hash_key="u1",
-            update_expression={UpdateAttr("tags").add({"a", "b"})},
-            return_values="ALL_NEW",
-        )
+    # tags is absent (not NULL) — ADD on an absent set attribute creates it
+    after_add = await db.update(
+        CounterUser,
+        hash_key="u1",
+        update_expression={UpdateAttr("tags").add({"a", "b"})},
+        return_values="ALL_NEW",
+    )
+    assert after_add.tags == {"a", "b"}
 
-    with pytest.raises(ClientError, match="ValidationException"):
-        await db.update(
-            CounterUser,
-            hash_key="u1",
-            update_expression={UpdateAttr("tags").delete({"b"})},
-            return_values="ALL_NEW",
-        )
+    # DELETE removes elements from an existing set
+    after_delete = await db.update(
+        CounterUser,
+        hash_key="u1",
+        update_expression={UpdateAttr("tags").delete({"b"})},
+        return_values="ALL_NEW",
+    )
+    assert after_delete.tags == {"a"}
