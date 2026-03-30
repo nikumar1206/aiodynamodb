@@ -17,7 +17,7 @@ from aiodynamodb import (
     table,
 )
 from aiodynamodb.custom_types import Timestamp
-from tests.entities import Basket, ComplexOrder, Item, User
+from tests.unit.entities import Basket, ComplexOrder, Item, User
 
 
 async def test_transact_write_applies_put_delete_and_condition(db):

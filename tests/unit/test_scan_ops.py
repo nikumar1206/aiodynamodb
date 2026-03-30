@@ -1,7 +1,7 @@
 from boto3.dynamodb.conditions import Attr
 
 from aiodynamodb import ProjectionAttr
-from tests.entities import Order, User
+from tests.unit.entities import Order, User
 
 
 async def test_scan_returns_all_items(db):

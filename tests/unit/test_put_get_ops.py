@@ -5,7 +5,7 @@ from boto3.dynamodb.conditions import Attr
 from pydantic_core import TzInfo
 
 from aiodynamodb import DynamoModel, ProjectionAttr, table
-from tests.entities import Basket, ComplexOrder, Item, Order, User
+from tests.unit.entities import Basket, ComplexOrder, Item, Order, User
 
 
 async def test_put_and_get(db):

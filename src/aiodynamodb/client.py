@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import Any, Literal, Self, assert_never, cast
 
 import aioboto3
+from aioboto3.session import ResourceCreatorContext
+from aiobotocore.session import ClientCreatorContext
 from boto3.dynamodb.conditions import ConditionBase
 from types_aiobotocore_dynamodb import DynamoDBServiceResource
 from types_aiobotocore_dynamodb.client import DynamoDBClient, Exceptions
@@ -128,8 +130,8 @@ class DynamoDB:
         self._exceptions: Exceptions | None = None
         self._held_resource: DynamoDBServiceResource | None = None
         self._held_client: DynamoDBClient | None = None
-        self._resource_ctx: Any = None
-        self._client_ctx: Any = None
+        self._resource_ctx: ResourceCreatorContext[DynamoDBServiceResource] | None = None
+        self._client_ctx: ClientCreatorContext[DynamoDBClient] | None = None
         self._resource_lock: asyncio.Lock = asyncio.Lock()
         self._client_lock: asyncio.Lock = asyncio.Lock()
         self._table_cache: dict[str, Table] = {}

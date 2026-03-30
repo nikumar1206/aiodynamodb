@@ -6,7 +6,7 @@ from types_aiobotocore_dynamodb import DynamoDBClient
 
 from aiodynamodb import DynamoModel, table
 from aiodynamodb.custom_types import JSONStr, Timestamp, TimestampMillis
-from tests.entities import Basket, Item
+from tests.unit.entities import Basket, Item
 
 
 async def test_items_are_stored_in_the_correct_raw_format(db):

@@ -6,7 +6,7 @@ from pydantic_core import TzInfo
 
 from aiodynamodb import DynamoModel, UpdateAttr, table
 from aiodynamodb.custom_types import Timestamp
-from tests.entities import Basket, ComplexOrder, Item, User
+from tests.unit.entities import Basket, ComplexOrder, Item, User
 
 
 async def test_update_supports_high_level_update_expression(db):

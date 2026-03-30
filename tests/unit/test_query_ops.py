@@ -3,7 +3,7 @@ from datetime import datetime
 from boto3.dynamodb.conditions import Attr, Key
 from pydantic_core import TzInfo
 
-from tests.entities import Basket, ComplexOrder, Item, Order
+from tests.unit.entities import Basket, ComplexOrder, Item, Order
 
 
 async def test_query_returns_paginated_results(db):

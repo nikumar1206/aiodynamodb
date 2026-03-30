@@ -4,7 +4,7 @@ import pytest
 from pydantic_core import TzInfo
 
 from aiodynamodb import BatchDelete, BatchGet, BatchPut, ProjectionAttr
-from tests.entities import Basket, ComplexOrder, Item, User
+from tests.unit.entities import Basket, ComplexOrder, Item, User
 
 
 async def test_batch_write_applies_put_and_delete(db):

@@ -18,6 +18,7 @@ nav = [
     "guides/custom-types.md",
     "guides/exceptions.md",
     "guides/testing.md",
+    "guides/fastapi.md",
   ]},
   {"API Reference" = [
     "api-reference/client.md",
