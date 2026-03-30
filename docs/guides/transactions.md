@@ -91,7 +91,7 @@ TransactUpdate(
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `operations` | `list[...]` | — | List of `TransactPut`, `TransactDelete`, `TransactConditionCheck`, or `TransactUpdate` |
-| `client_request_token` | `str \| None` | `None` | Idempotency token (deduplicated within 10 minutes) |
+| `client_request_token` | `str | None` | `None` | Idempotency token (deduplicated within 10 minutes) |
 | `return_consumed_capacity` | `bool` | `False` | Include consumed capacity |
 | `return_item_collection_metrics` | `bool` | `False` | Include item collection metrics |
 
@@ -121,8 +121,8 @@ order = items[2]  # Order | None
 |---|---|---|
 | `model` | `type[T]` | `DynamoModel` subclass |
 | `hash_key` | `KeyT` | Partition key value |
-| `range_key` | `KeyT \| None` | Sort key value (optional) |
-| `projection_expression` | `list[ProjectionAttr] \| None` | Fields to project |
+| `range_key` | `KeyT | None` | Sort key value (optional) |
+| `projection_expression` | `list[ProjectionAttr] | None` | Fields to project |
 
 ### `transact_get` parameters
 

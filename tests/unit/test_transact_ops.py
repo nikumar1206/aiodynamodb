@@ -51,7 +51,7 @@ async def test_transact_get_parses_models_and_serializes_custom_keys(db):
     await db.put(
         ComplexOrder(
             order_id="o1",
-            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo()),
             total=100,
             basket=basket,
         )
@@ -60,7 +60,7 @@ async def test_transact_get_parses_models_and_serializes_custom_keys(db):
     results = await db.transact_get(
         [
             TransactGet(User, hash_key="u1"),
-            TransactGet(ComplexOrder, hash_key="o1", range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0))),
+            TransactGet(ComplexOrder, hash_key="o1", range_key=datetime(2020, 1, 1, tzinfo=TzInfo())),
             TransactGet(User, hash_key="missing"),
         ],
         return_consumed_capacity=True,
@@ -70,7 +70,7 @@ async def test_transact_get_parses_models_and_serializes_custom_keys(db):
         User(user_id="u1", name="Alice", email="alice@example.com"),
         ComplexOrder(
             order_id="o1",
-            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo()),
             total=100,
             basket=basket,
         ),
@@ -98,20 +98,20 @@ async def test_transact_get_accepts_projection_expression(db: DynamoDB):
 async def test_transact_write_supports_update_operation(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
     await db.put(
-        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)), total=100, basket=basket)
+        ComplexOrder(order_id="o1", created_at=datetime(2020, 1, 1, tzinfo=TzInfo()), total=100, basket=basket)
     )
 
     await db.transact_write([
         TransactUpdate(
             ComplexOrder,
             hash_key="o1",
-            range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            range_key=datetime(2020, 1, 1, tzinfo=TzInfo()),
             update_expression={UpdateAttr("total").set(250)},
             condition_expression=Attr("total").gte(100),
         )
     ])
 
-    updated = await db.get(ComplexOrder, hash_key="o1", range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)))
+    updated = await db.get(ComplexOrder, hash_key="o1", range_key=datetime(2020, 1, 1, tzinfo=TzInfo()))
     assert updated is not None
     assert updated.total == 250
 
@@ -125,7 +125,7 @@ async def test_transact_write_update_serializes_timestamp_fields(db):
     await db.create_table(Event)
     await db.put(Event(event_id="e1"))
 
-    ts = datetime(2020, 1, 1, tzinfo=TzInfo(0))
+    ts = datetime(2020, 1, 1, tzinfo=TzInfo())
     await db.transact_write([
         TransactUpdate(
             Event,
@@ -140,7 +140,7 @@ async def test_transact_write_update_serializes_timestamp_fields(db):
 
 async def test_transact_write_update_supports_nested_field_paths(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
-    created_at = datetime(2020, 1, 1, tzinfo=TzInfo(0))
+    created_at = datetime(2020, 1, 1, tzinfo=TzInfo())
     await db.put(ComplexOrder(order_id="o1", created_at=created_at, total=100, basket=basket))
 
     await db.transact_write([

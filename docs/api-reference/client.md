@@ -20,7 +20,7 @@ DynamoDB(
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `session` | `aioboto3.Session \| None` | `None` | Optional aioboto3 session. A new one is created if omitted. |
+| `session` | `aioboto3.Session | None` | `None` | Optional aioboto3 session. A new one is created if omitted. |
 | `hash_key_types` | `dict[Any, str]` | Built-in map | Mapping from Python type to DynamoDB attribute type (`"S"`, `"N"`, `"B"`). Override to add custom key types. |
 
 ### Context manager

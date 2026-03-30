@@ -1,5 +1,6 @@
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Key
 
+from aiodynamodb import BatchPut, TransactPut
 from tests.integration.conftest import Event, Order, Product
 
 
@@ -62,13 +63,13 @@ async def test_gsi_query_with_filter(db):
     await db.put(Order(order_id="o1", created_at="2026-01-01", total=100, status="shipped"))
     await db.put(Order(order_id="o2", created_at="2026-01-02", total=500, status="shipped"))
 
+    # total is the GSI range key — must be in key_condition_expression, not filter_expression
     items = [
         item
         async for page in db.query(
             Order,
             index_name="status_idx",
-            key_condition_expression=Key("status").eq("shipped"),
-            filter_expression=Attr("total").lt(200),
+            key_condition_expression=Key("status").eq("shipped") & Key("total").lt(200),
         )
         for item in page.items
     ]
@@ -158,3 +159,45 @@ async def test_sparse_gsi_scan_excludes_items_without_key(db_product):
 
     assert len(items) == 2
     assert {i.product_id for i in items} == {"p1", "p3"}
+
+
+async def test_batch_write_sparse_gsi(db_product):
+    """Items written via batch_write with a None GSI key must be excluded from the index."""
+    await db_product.batch_write([
+        BatchPut(Product(product_id="p1", name="Widget", category="electronics")),
+        BatchPut(Product(product_id="p2", name="Unknown")),  # no category — must be absent from GSI
+    ])
+
+    items = [
+        item
+        async for page in db_product.query(
+            Product,
+            index_name="category_idx",
+            key_condition_expression=Key("category").eq("electronics"),
+        )
+        for item in page.items
+    ]
+
+    assert len(items) == 1
+    assert items[0].product_id == "p1"
+
+
+async def test_transact_put_sparse_gsi(db_product):
+    """Items written via transact_write with a None GSI key must be excluded from the index."""
+    await db_product.transact_write([
+        TransactPut(Product(product_id="p1", name="Widget", category="electronics")),
+        TransactPut(Product(product_id="p2", name="Unknown")),  # no category — must be absent from GSI
+    ])
+
+    items = [
+        item
+        async for page in db_product.query(
+            Product,
+            index_name="category_idx",
+            key_condition_expression=Key("category").eq("electronics"),
+        )
+        for item in page.items
+    ]
+
+    assert len(items) == 1
+    assert items[0].product_id == "p1"

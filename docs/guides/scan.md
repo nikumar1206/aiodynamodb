@@ -17,12 +17,12 @@ async for page in db.scan(User):
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `model` | `type[T]` | — | `DynamoModel` subclass to scan |
-| `index_name` | `str \| None` | `None` | Name of a GSI or LSI to scan |
-| `filter_expression` | `ConditionBase \| None` | `None` | Attribute filter applied after the scan read |
-| `limit` | `int \| None` | `None` | Max items to evaluate per page |
-| `exclusive_start_key` | `dict \| None` | `None` | Pagination token from a previous page |
+| `index_name` | `str | None` | `None` | Name of a GSI or LSI to scan |
+| `filter_expression` | `ConditionBase | None` | `None` | Attribute filter applied after the scan read |
+| `limit` | `int | None` | `None` | Max items to evaluate per page |
+| `exclusive_start_key` | `dict | None` | `None` | Pagination token from a previous page |
 | `consistent_read` | `bool` | `False` | Strongly consistent reads (not supported on GSIs) |
-| `projection_expression` | `list[ProjectionAttr] \| None` | `None` | Project specific fields |
+| `projection_expression` | `list[ProjectionAttr] | None` | `None` | Project specific fields |
 | `return_consumed_capacity` | `bool` | `False` | Include consumed capacity in response |
 
 ## Filtering

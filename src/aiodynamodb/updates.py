@@ -26,8 +26,11 @@ class UpdateAttr(AttributeBase):
     value: Any
 
     def set(self, value: Any) -> Self:
-        self.value = value
-        self.type = Action.SET
+        if value is None:
+            self.type = Action.REMOVE
+        else:
+            self.value = value
+            self.type = Action.SET
         return self
 
     def remove(self) -> Self:

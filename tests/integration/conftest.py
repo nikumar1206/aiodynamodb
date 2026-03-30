@@ -45,7 +45,7 @@ created_lsi = LSI(name="created_idx", range_key="created_at")
 class Order(DynamoModel):
     order_id: str
     created_at: str
-    total: int
+    total: int = 0
     status: str = "pending"
 
 

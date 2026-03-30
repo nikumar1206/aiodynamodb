@@ -49,13 +49,13 @@ BatchDelete(Order, hash_key="o1", range_key="2026-01-01T00:00:00")
 |---|---|---|
 | `model` | `type[T]` | Model class |
 | `hash_key` | `KeyT` | Partition key value |
-| `range_key` | `KeyT \| None` | Sort key value (optional) |
+| `range_key` | `KeyT | None` | Sort key value (optional) |
 
 ### `batch_write` parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `operations` | `list[BatchPut \| BatchDelete]` | — | Operations to execute |
+| `operations` | `list[BatchPut | BatchDelete]` | — | Operations to execute |
 | `return_consumed_capacity` | `bool` | `False` | Include consumed capacity |
 | `return_item_collection_metrics` | `bool` | `False` | Include item collection metrics |
 
@@ -85,9 +85,9 @@ Items are returned in an **unordered** dict grouped by model class — the order
 |---|---|---|---|
 | `model` | `type[T]` | — | Model class |
 | `hash_key` | `KeyT` | — | Partition key value |
-| `range_key` | `KeyT \| None` | `None` | Sort key value (optional) |
+| `range_key` | `KeyT | None` | `None` | Sort key value (optional) |
 | `consistent_read` | `bool` | `False` | Strongly consistent read |
-| `projection_expression` | `list[ProjectionAttr] \| None` | `None` | Fields to project |
+| `projection_expression` | `list[ProjectionAttr] | None` | `None` | Fields to project |
 
 > **Note:** `consistent_read` must be the same for all requests targeting the same table. Mixed values raise `ValueError`.
 

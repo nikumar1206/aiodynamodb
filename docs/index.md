@@ -48,3 +48,4 @@ asyncio.run(main())
 ```
 
 > **Not thread-safe.** `DynamoDB` holds internal async locks and connection state. Create one instance per async context and do not share across threads.
+> **Avoid managing infra.** AiodynamoDB can definitely create/delete your Dynamo tables, but we would like to warn against creating infrastructure in application code. This is much better done through dedicated IaaC such as Terraform. Please only use the `create_table` or `delete_table` APIs for testing purposes.

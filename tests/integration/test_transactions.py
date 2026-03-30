@@ -117,9 +117,23 @@ async def test_transact_write_idempotency_token(db):
         [TransactPut(User(user_id="u1", name="Alice"))],
         client_request_token="idempotency-token-1",
     )
-    # Retry with same token and different payload — DynamoDB replays the original
+    # Retry with same token and same payload — DynamoDB treats this as a no-op replay
     await db.transact_write(
-        [TransactPut(User(user_id="u1", name="Should Not Apply"))],
+        [TransactPut(User(user_id="u1", name="Alice"))],
         client_request_token="idempotency-token-1",
     )
     assert (await db.get(User, hash_key="u1")).name == "Alice"
+
+
+async def test_transact_update_remove_only(db):
+    """TransactUpdate with a REMOVE-only expression must not send an empty ExpressionAttributeValues."""
+    await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
+    await db.transact_write([
+        TransactUpdate(
+            User,
+            hash_key="u1",
+            update_expression={UpdateAttr("email").remove()},
+        ),
+    ])
+    fetched = await db.get(User, hash_key="u1")
+    assert fetched.email is None

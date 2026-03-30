@@ -112,12 +112,12 @@ class DynamoModel(BaseModel):
 
     def to_dynamo(self) -> dict[str, Any]:
         """Serialize model fields to DynamoDB AttributeValue objects."""
-        dumped = self.model_dump(mode="json")
+        dumped = self.model_dump(mode="json", exclude_none=True)
         return {k: SERIALIZER._to_dynamo(v) for k, v in dumped.items()}
 
     def to_dynamo_compatible(self) -> dict[str, Any]:
         """Serialize model fields to DynamoDB AttributeValue objects."""
-        dumped = self.model_dump(mode="json")
+        dumped = self.model_dump(mode="json", exclude_none=True)
         if not type(self)._has_float_fields:
             return dumped
         return cast(dict[str, Any], _to_dynamo_compatible(dumped))

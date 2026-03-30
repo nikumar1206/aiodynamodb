@@ -30,7 +30,7 @@ async def test_batch_get_groups_requests_and_parses_typed_models(db):
     await db.put(
         ComplexOrder(
             order_id="o1",
-            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo()),
             total=100,
             basket=basket,
         )
@@ -40,7 +40,7 @@ async def test_batch_get_groups_requests_and_parses_typed_models(db):
         [
             BatchGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("name")]),
             BatchGet(
-                ComplexOrder, hash_key="o1", range_key=datetime(2020, 1, 1, tzinfo=TzInfo(0)), consistent_read=True
+                ComplexOrder, hash_key="o1", range_key=datetime(2020, 1, 1, tzinfo=TzInfo()), consistent_read=True
             ),
         ],
         return_consumed_capacity=True,
@@ -50,7 +50,7 @@ async def test_batch_get_groups_requests_and_parses_typed_models(db):
     assert result.items[ComplexOrder] == [
         ComplexOrder(
             order_id="o1",
-            created_at=datetime(2020, 1, 1, tzinfo=TzInfo(0)),
+            created_at=datetime(2020, 1, 1, tzinfo=TzInfo()),
             total=100,
             basket=basket,
         )

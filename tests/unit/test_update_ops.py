@@ -31,7 +31,7 @@ async def test_update_serializes_timestamp_fields(db):
     await db.create_table(Event)
     await db.put(Event(event_id="e1"))
 
-    ts = datetime(2020, 1, 1, tzinfo=TzInfo(0))
+    ts = datetime(2020, 1, 1, tzinfo=TzInfo())
     updated = await db.update(
         Event,
         hash_key="e1",
@@ -44,7 +44,7 @@ async def test_update_serializes_timestamp_fields(db):
 
 async def test_update_supports_nested_field_paths(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo")])
-    created_at = datetime(2020, 1, 1, tzinfo=TzInfo(0))
+    created_at = datetime(2020, 1, 1, tzinfo=TzInfo())
     await db.put(ComplexOrder(order_id="o1", created_at=created_at, total=100, basket=basket))
 
     updated = await db.update(
@@ -87,7 +87,7 @@ async def test_update_supports_atomic_counter_increment(db):
 
 async def test_update_supports_specific_indexed_list_element(db):
     basket = Basket(items=[Item(qty=1, price=10.9, name="foo"), Item(qty=2, price=5.5, name="bar")])
-    created_at = datetime(2020, 1, 1, tzinfo=TzInfo(0))
+    created_at = datetime(2020, 1, 1, tzinfo=TzInfo())
     await db.put(ComplexOrder(order_id="o1", created_at=created_at, total=100, basket=basket))
 
     updated = await db.update(

@@ -20,14 +20,14 @@ async for page in db.query(
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `model` | `type[T]` | — | `DynamoModel` subclass to query |
-| `key_condition_expression` | `ConditionBase \| None` | `None` | Key condition (required for most queries) |
-| `index_name` | `str \| None` | `None` | Name of a GSI or LSI to query |
-| `filter_expression` | `ConditionBase \| None` | `None` | Post-key filter applied after key lookup |
-| `limit` | `int \| None` | `None` | Max items to evaluate per page |
-| `exclusive_start_key` | `dict \| None` | `None` | Pagination token from a previous page |
+| `key_condition_expression` | `ConditionBase | None` | `None` | Key condition (required for most queries) |
+| `index_name` | `str | None` | `None` | Name of a GSI or LSI to query |
+| `filter_expression` | `ConditionBase | None` | `None` | Post-key filter applied after key lookup |
+| `limit` | `int | None` | `None` | Max items to evaluate per page |
+| `exclusive_start_key` | `dict | None` | `None` | Pagination token from a previous page |
 | `consistent_read` | `bool` | `False` | Strongly consistent reads |
 | `scan_index_forward` | `bool` | `True` | Sort ascending (`True`) or descending (`False`) |
-| `projection_expression` | `list[ProjectionAttr] \| None` | `None` | Project specific fields |
+| `projection_expression` | `list[ProjectionAttr] | None` | `None` | Project specific fields |
 | `return_consumed_capacity` | `bool` | `False` | Include consumed capacity in response |
 
 ## Pagination patterns
@@ -139,4 +139,4 @@ Each page yielded by `query()` is a `QueryResult[T]`:
 | Field | Type | Description |
 |---|---|---|
 | `items` | `list[T]` | Validated model instances for this page |
-| `last_evaluated_key` | `dict \| None` | Pagination token; `None` on the last page |
+| `last_evaluated_key` | `dict | None` | Pagination token; `None` on the last page |

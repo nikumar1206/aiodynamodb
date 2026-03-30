@@ -23,8 +23,8 @@ class User(DynamoModel):
 |---|---|---|
 | `name` | `str` | DynamoDB table name |
 | `hash_key` | `str` | Field name used as the partition key |
-| `range_key` | `str \| None` | Field name used as the sort key (optional) |
-| `indexes` | `list[GSI \| LSI] \| None` | Secondary indexes (optional) |
+| `range_key` | `str | None` | Field name used as the sort key (optional) |
+| `indexes` | `list[GSI | LSI] | None` | Secondary indexes (optional) |
 
 ## Composite key tables
 

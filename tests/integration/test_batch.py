@@ -1,4 +1,4 @@
-from aiodynamodb import BatchDelete, BatchGet, BatchPut
+from aiodynamodb import BatchDelete, BatchGet, BatchPut, ProjectionAttr
 from tests.integration.conftest import User
 
 
@@ -80,6 +80,22 @@ async def test_batch_get_with_projection(db):
     assert user.name == "Alice"
     assert user.age is None  # not projected
     assert user.email is None  # not projected
+
+
+async def test_batch_get_projection_omits_required_field(db):
+    """batch_get with a projection that excludes a required field must not crash."""
+    await db.put(User(user_id="u1", name="Alice", age=30))
+
+    result = await db.batch_get([
+        BatchGet(User, hash_key="u1", projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("age")]),
+    ])
+
+    users = result.items[User]
+    assert len(users) == 1
+    assert users[0].user_id == "u1"
+    assert users[0].age == 30
+    assert isinstance(users[0].age, int)  # must be int, not Decimal
+    assert users[0].email is None  # not projected — falls back to default
 
 
 async def test_batch_write_25_items(db):

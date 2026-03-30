@@ -1,4 +1,4 @@
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 
 from aiodynamodb import ProjectionAttr
 from tests.integration.conftest import Order, User
@@ -97,3 +97,62 @@ async def test_transact_get_with_projection(db):
     assert results[0].name == "Alice"
     assert results[0].age is None
     assert results[0].email is None
+
+
+async def test_projection_numeric_field_type_coercion(db):
+    """Projected numeric fields must come back as int, not Decimal."""
+    await db.put(User(user_id="u1", name="Alice", age=30))
+
+    user = await db.get(
+        User,
+        hash_key="u1",
+        projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("age")],
+    )
+
+    assert user.age == 30
+    assert isinstance(user.age, int)
+
+
+async def test_query_projection_with_filter(db):
+    """Projection and filter in the same query must not produce ExpressionAttributeNames conflicts."""
+    await db.put(Order(order_id="o1", created_at="2026-01-01", total=100, status="shipped"))
+    await db.put(Order(order_id="o1", created_at="2026-01-02", total=200, status="pending"))
+    await db.put(Order(order_id="o1", created_at="2026-01-03", total=50, status="shipped"))
+
+    items = [
+        item
+        async for page in db.query(
+            Order,
+            key_condition_expression=Key("order_id").eq("o1"),
+            filter_expression=Attr("status").eq("shipped"),
+            projection_expression=[ProjectionAttr("order_id"), ProjectionAttr("created_at"), ProjectionAttr("total")],
+        )
+        for item in page.items
+    ]
+
+    assert len(items) == 2
+    assert {i.created_at for i in items} == {"2026-01-01", "2026-01-03"}
+    assert all(i.total is not None for i in items)
+    assert all(i.status == "pending" for i in items)  # not projected — falls back to model default
+
+
+async def test_scan_projection_with_filter(db):
+    """Projection and filter in the same scan must not produce ExpressionAttributeNames conflicts."""
+    await db.put(User(user_id="u1", name="Alice", age=30))
+    await db.put(User(user_id="u2", name="Bob", age=25))
+    await db.put(User(user_id="u3", name="Carol", age=17))
+
+    items = [
+        item
+        async for page in db.scan(
+            User,
+            filter_expression=Attr("age").gte(18),
+            projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("age")],
+        )
+        for item in page.items
+    ]
+
+    assert len(items) == 2
+    assert all(i.age >= 18 for i in items)
+    assert all(isinstance(i.age, int) for i in items)
+    assert all(i.email is None for i in items)  # not projected — falls back to default

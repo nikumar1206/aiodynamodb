@@ -5,6 +5,51 @@ from aiodynamodb import UpdateAttr
 from tests.integration.conftest import Order, User
 
 
+async def test_update_set_none_removes_attribute(db):
+    """UpdateAttr.set(None) must behave like .remove(), not store a NULL."""
+    await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
+    await db.update(User, hash_key="u1", update_expression={UpdateAttr("email").set(None)})
+
+    fetched = await db.get(User, hash_key="u1")
+    assert fetched.email is None
+
+    # The attribute must be absent, not NULL — Attr.exists() should fail.
+    ex = await db.exceptions()
+    with pytest.raises(ex.ConditionalCheckFailedException):
+        await db.put(
+            User(user_id="u1", name="Alice"),
+            condition_expression=Attr("email").exists(),
+        )
+
+
+async def test_update_returns_updated_new(db):
+    """UPDATED_NEW returns only the changed attributes; absent fields fall back to defaults."""
+    await db.put(User(user_id="u1", name="Alice", age=20))
+    updated = await db.update(
+        User,
+        hash_key="u1",
+        update_expression={UpdateAttr("name").set("Bob")},
+        return_values="UPDATED_NEW",
+    )
+    assert updated is not None
+    assert updated.name == "Bob"
+    assert updated.age is None  # not in UPDATED_NEW response — falls back to default
+
+
+async def test_update_returns_updated_old(db):
+    """UPDATED_OLD returns only the pre-update values of changed attributes."""
+    await db.put(User(user_id="u1", name="Alice", age=20))
+    old = await db.update(
+        User,
+        hash_key="u1",
+        update_expression={UpdateAttr("name").set("Bob")},
+        return_values="UPDATED_OLD",
+    )
+    assert old is not None
+    assert old.name == "Alice"
+    assert old.age is None  # not in UPDATED_OLD response — falls back to default
+
+
 async def test_update_set_single_field(db):
     await db.put(User(user_id="u1", name="Alice"))
     await db.update(User, hash_key="u1", update_expression={UpdateAttr("name").set("Bob")})

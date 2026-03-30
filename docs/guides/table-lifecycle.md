@@ -28,9 +28,9 @@ await db.create_table(
 |---|---|---|---|
 | `model` | `type[T]` | — | `DynamoModel` subclass |
 | `billing_mode` | `BillingModeType` | `"PAY_PER_REQUEST"` | `"PAY_PER_REQUEST"` or `"PROVISIONED"` |
-| `provisioned_throughput` | `ProvisionedThroughputTypeDef \| None` | `None` | Required when `billing_mode="PROVISIONED"` |
-| `tags` | `list[TagTypeDef] \| None` | `None` | Tags to attach to the table |
-| `table_class` | `TableClassType \| None` | `None` | `"STANDARD"` or `"STANDARD_INFREQUENT_ACCESS"` |
+| `provisioned_throughput` | `ProvisionedThroughputTypeDef | None` | `None` | Required when `billing_mode="PROVISIONED"` |
+| `tags` | `list[TagTypeDef] | None` | `None` | Tags to attach to the table |
+| `table_class` | `TableClassType | None` | `None` | `"STANDARD"` or `"STANDARD_INFREQUENT_ACCESS"` |
 
 ### What gets created
 
