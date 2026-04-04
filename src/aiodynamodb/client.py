@@ -234,22 +234,26 @@ class DynamoDB:
         table = await self._table(item.Meta.table_name)
         await table.put_item(Item=item.to_dynamo_compatible(), **args)
 
-    async def delete(self, item: DynamoModel, *, condition_expression: ConditionBase | None = None) -> None:
-        """Delete an item from DynamoDB.
+    async def delete[T: DynamoModel](
+        self,
+        model: type[T],
+        *,
+        hash_key: KeyT,
+        range_key: KeyT | None = None,
+        condition_expression: ConditionBase | None = None,
+    ) -> None:
+        """Delete an item by primary key.
 
         Args:
-            item: The model instance that identifies the row to remove.
+            model: ``DynamoModel`` subclass mapped to the target table.
+            hash_key: Partition key value.
+            range_key: Sort key value, when the table defines one.
             condition_expression: Optional conditional expression that must match
                 for the delete to succeed.
         """
-        meta = type(item).Meta
-        key = _build_key(
-            type(item),
-            hash_key=getattr(item, meta.hash_key),
-            range_key=getattr(item, meta.range_key) if meta.range_key else None,
-        )
-        args = _condition_expressions(type(item), condition_expression)
-        table = await self._table(meta.table_name)
+        key = _build_key(model, hash_key=hash_key, range_key=range_key)
+        args = _condition_expressions(model, condition_expression)
+        table = await self._table(model.Meta.table_name)
         await table.delete_item(Key=key, **args)
 
     async def update[T: DynamoModel](

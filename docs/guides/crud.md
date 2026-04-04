@@ -87,10 +87,16 @@ async def get(
 
 ## delete
 
-Delete an item. Pass a model instance — the client extracts the key from it.
+Delete an item by primary key.
 
 ```python
-await db.delete(User(user_id="u1", name="Alice"))
+await db.delete(User, hash_key="u1")
+```
+
+With a composite key:
+
+```python
+await db.delete(Order, hash_key="o1", range_key="2026-01-01")
 ```
 
 ### Conditional delete
@@ -99,7 +105,8 @@ await db.delete(User(user_id="u1", name="Alice"))
 from boto3.dynamodb.conditions import Attr
 
 await db.delete(
-    User(user_id="u1", name="Alice"),
+    User,
+    hash_key="u1",
     condition_expression=Attr("user_id").exists(),
 )
 ```
@@ -109,8 +116,10 @@ await db.delete(
 ```python
 async def delete(
     self,
-    item: DynamoModel,
+    model: type[T],
     *,
+    hash_key: KeyT,
+    range_key: KeyT | None = None,
     condition_expression: ConditionBase | None = None,
 ) -> None
 ```
