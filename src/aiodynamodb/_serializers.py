@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, cast, get_args, get_origin
 
-from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
+from boto3.dynamodb.types import Binary, TypeDeserializer, TypeSerializer
 from pydantic import BaseModel, TypeAdapter
 
 from aiodynamodb.custom_types import KeyT
@@ -84,10 +84,8 @@ class DynamoSerializer:
 
 def _unwrap_binary(value: Any) -> Any:
     """Recursively convert boto3 ``Binary`` wrappers to plain ``bytes``."""
-    from boto3.dynamodb.types import Binary
-
     if isinstance(value, Binary):
-        return bytes(value)
+        return bytes(value)  # type: ignore[call-overload]
     if isinstance(value, list):
         return [_unwrap_binary(v) for v in value]
     if isinstance(value, set):
