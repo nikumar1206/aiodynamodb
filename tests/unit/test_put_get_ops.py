@@ -160,6 +160,21 @@ async def test_delete_with_condition_expression(db):
     assert await db.get(User, hash_key="u1") is None
 
 
+async def test_bytes_hash_key_roundtrip(db):
+    @table("binary_items", hash_key="key_id")
+    class BinaryItem(DynamoModel):
+        key_id: bytes
+        value: str
+
+    await db.create_table(BinaryItem)
+    await db.put(BinaryItem(key_id=b"mykey", value="hello"))
+
+    fetched = await db.get(BinaryItem, hash_key=b"mykey")
+    assert fetched is not None
+    assert fetched.key_id == b"mykey"
+    assert fetched.value == "hello"
+
+
 async def test_get_supports_specific_set_member(db):
     @table("tagged_users", hash_key="user_id")
     class TaggedUser(DynamoModel):

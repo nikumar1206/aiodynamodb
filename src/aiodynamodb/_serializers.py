@@ -1,4 +1,5 @@
 import typing
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, cast, get_args, get_origin
 
@@ -43,9 +44,15 @@ def _resolve_key_annotation(annotation: Any) -> type:
 
 
 def _serialize_dynamo_primitives(value: Any) -> Any:
-    """Recursively cast ``float`` values to ``Decimal`` for DynamoDB numbers."""
+    """Recursively coerce Python values into forms boto3 can serialize.
+
+    - ``float`` → ``Decimal`` (DynamoDB Number requires Decimal)
+    - ``datetime`` → ISO-8601 string (DynamoDB has no native datetime type)
+    """
     if isinstance(value, float):
         return Decimal(str(value))
+    if isinstance(value, datetime):
+        return value.isoformat()
     if isinstance(value, list):
         return [_serialize_dynamo_primitives(v) for v in value]
     if isinstance(value, tuple):
@@ -75,6 +82,21 @@ class DynamoSerializer:
         return self._to_dynamo(value)
 
 
+def _unwrap_binary(value: Any) -> Any:
+    """Recursively convert boto3 ``Binary`` wrappers to plain ``bytes``."""
+    from boto3.dynamodb.types import Binary
+
+    if isinstance(value, Binary):
+        return bytes(value)
+    if isinstance(value, list):
+        return [_unwrap_binary(v) for v in value]
+    if isinstance(value, set):
+        return {_unwrap_binary(v) for v in value}
+    if isinstance(value, dict):
+        return {k: _unwrap_binary(v) for k, v in value.items()}
+    return value
+
+
 class DynamoDeserializer:
     """Wrapper around boto3 deserializer."""
 
@@ -82,7 +104,7 @@ class DynamoDeserializer:
         self._deserializer = TypeDeserializer()
 
     def _to_dynamo(self, value: dict[str, Any]) -> Any:
-        return self._deserializer.deserialize(value)  # type: ignore[arg-type]
+        return _unwrap_binary(self._deserializer.deserialize(value))  # type: ignore[arg-type]
 
     def deserialize(self, value: dict[str, Any]) -> Any:
         return self._to_dynamo(value)

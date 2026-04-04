@@ -34,6 +34,7 @@ from aiodynamodb._serializers import (
     _resolve_key_annotation,
     _serialize_custom_attribute,
     _to_dynamo_compatible,
+    _unwrap_binary,
 )
 from aiodynamodb._util import (
     ConditionExpression,
@@ -115,6 +116,9 @@ def _to_model[T: DynamoModel](item: Raw, model: type[T], _is_raw_dynamo: bool = 
             deserialized = {k: DESERIALIZER._to_dynamo(v) for k, v in item.items()}
             return _to_partial_model(deserialized, model)
         return model.from_dynamo(item)
+    # boto3 resource responses may contain Binary wrappers that Pydantic cannot
+    # validate as ``bytes`` directly — unwrap them first.
+    item = _unwrap_binary(item)
     if _partial:
         return _to_partial_model(item, model)
     return model.model_validate(item)
@@ -152,14 +156,24 @@ class DynamoDB:
     operations and returns validated model instances for reads/queries.
     """
 
-    def __init__(self, session: aioboto3.Session | None = None, hash_key_types: dict[Any, str] = _KEY_TO_TYPE):
+    def __init__(
+        self,
+        session: aioboto3.Session | None = None,
+        hash_key_types: dict[Any, str] = _KEY_TO_TYPE,
+        **kwargs: Any,
+    ):
         """Create a client instance.
 
         Args:
             session: Optional ``aioboto3`` session. If omitted, a new session is created.
+            hash_key_types: Mapping of Python types to DynamoDB type codes.
+            **kwargs: Extra keyword arguments forwarded to both
+                ``session.resource()`` and ``session.client()`` (e.g.
+                ``endpoint_url``, ``region_name``, ``config``).
         """
         self._session = session or aioboto3.Session()
         self.hash_key_types = hash_key_types
+        self._boto_kwargs = kwargs
         self._exceptions: Exceptions | None = None
         self._held_resource: DynamoDBServiceResource | None = None
         self._held_client: DynamoDBClient | None = None
@@ -200,7 +214,7 @@ class DynamoDB:
             return self._held_resource
         async with self._resource_lock:
             if self._held_resource is None:
-                self._resource_ctx = self._session.resource("dynamodb")
+                self._resource_ctx = self._session.resource("dynamodb", **self._boto_kwargs)
                 self._held_resource = await self._resource_ctx.__aenter__()
         assert self._held_resource is not None
         return self._held_resource
@@ -210,7 +224,7 @@ class DynamoDB:
             return self._held_client
         async with self._client_lock:
             if self._held_client is None:
-                self._client_ctx = self._session.client("dynamodb")
+                self._client_ctx = self._session.client("dynamodb", **self._boto_kwargs)
                 self._held_client = await self._client_ctx.__aenter__()
         assert self._held_client is not None
         return self._held_client
