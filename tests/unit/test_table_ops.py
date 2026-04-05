@@ -95,6 +95,7 @@ def test_string_arg_hash_and_range_backward_compat():
 
 def test_both_annotation_and_string_arg_raises():
     with pytest.raises(TypeError, match="annotation or decorator argument, not both"):
+
         @table("t5", hash_key="pk")
         class M(DynamoModel):
             pk: HashKey[str]
@@ -102,6 +103,7 @@ def test_both_annotation_and_string_arg_raises():
 
 def test_multiple_hash_key_fields_raises():
     with pytest.raises(TypeError, match="multiple HashKey"):
+
         @table("t6")
         class M(DynamoModel):
             pk1: HashKey[str]
@@ -110,6 +112,7 @@ def test_multiple_hash_key_fields_raises():
 
 def test_multiple_range_key_fields_raises():
     with pytest.raises(TypeError, match="multiple RangeKey"):
+
         @table("t7")
         class M(DynamoModel):
             pk: HashKey[str]
@@ -119,6 +122,7 @@ def test_multiple_range_key_fields_raises():
 
 def test_no_hash_key_raises():
     with pytest.raises(TypeError, match="hash_key"):
+
         @table("t8")
         class M(DynamoModel):
             name: str
