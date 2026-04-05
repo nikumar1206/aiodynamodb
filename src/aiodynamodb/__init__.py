@@ -5,11 +5,11 @@ An async-first DynamoDB ORM built on aioboto3 and Pydantic v2.
 Note, not threadsafe.
 
 Example:
-    from aiodynamodb import table, DynamoDB, DynamoModel
+    from aiodynamodb import table, DynamoDB, DynamoModel, HashKey
 
-    @table("users", hash_key="user_id")
+    @table("users")
     class User(DynamoModel):
-        user_id: str
+        user_id: HashKey[str]
         name: str
         email: str | None = None
 
@@ -29,7 +29,7 @@ from aiodynamodb import custom_types
 from aiodynamodb.client import (
     DynamoDB,
 )
-from aiodynamodb.custom_types import ReturnValues
+from aiodynamodb.custom_types import HashKey, RangeKey, ReturnValues
 from aiodynamodb.models import (
     BatchDelete,
     BatchGet,
@@ -74,5 +74,7 @@ __all__ = [
     "table",
     "VERSION",
     "custom_types",
+    "HashKey",
+    "RangeKey",
     "ReturnValues",
 ]
