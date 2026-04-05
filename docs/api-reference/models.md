@@ -1,7 +1,7 @@
 # Models
 
 **Module:** `aiodynamodb.models`
-**Import:** `from aiodynamodb import DynamoModel, table`
+**Import:** `from aiodynamodb import DynamoModel, HashKey, RangeKey, table`
 
 ## `DynamoModel`
 
@@ -34,13 +34,26 @@ Deserialize from DynamoDB AttributeValue format back to a model instance.
 ```python
 def table(
     name: str,
-    hash_key: str,
-    range_key: str | None = None,
+    *,
     indexes: list[GSI | LSI] | None = None,
+    # Legacy (still supported for backward compatibility):
+    hash_key: str | None = None,
+    range_key: str | None = None,
 ) -> Callable
 ```
 
 Decorator that attaches DynamoDB table metadata to a `DynamoModel` subclass. Sets `cls.Meta` and computes `cls._has_float_fields`.
+
+The recommended way to declare keys is with `HashKey[T]` and `RangeKey[T]` field annotations:
+
+```python
+@table("users")
+class User(DynamoModel):
+    user_id: HashKey[str]
+    name: str
+```
+
+The legacy `hash_key="field"` / `range_key="field"` keyword arguments still work for backward compatibility.
 
 Index names must be unique within each index type.
 

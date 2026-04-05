@@ -4,7 +4,7 @@ import pytest
 from boto3.dynamodb.conditions import Attr
 from pydantic_core import TzInfo
 
-from aiodynamodb import DynamoModel, ProjectionAttr, table
+from aiodynamodb import DynamoModel, HashKey, ProjectionAttr, table
 from tests.unit.entities import Basket, ComplexOrder, Item, Order, User
 
 
@@ -161,9 +161,9 @@ async def test_delete_with_condition_expression(db):
 
 
 async def test_bytes_hash_key_roundtrip(db):
-    @table("binary_items", hash_key="key_id")
+    @table("binary_items")
     class BinaryItem(DynamoModel):
-        key_id: bytes
+        key_id: HashKey[bytes]
         value: str
 
     await db.create_table(BinaryItem)
@@ -176,9 +176,9 @@ async def test_bytes_hash_key_roundtrip(db):
 
 
 async def test_get_supports_specific_set_member(db):
-    @table("tagged_users", hash_key="user_id")
+    @table("tagged_users")
     class TaggedUser(DynamoModel):
-        user_id: str
+        user_id: HashKey[str]
         tags: set[str]
 
     await db.create_table(TaggedUser)

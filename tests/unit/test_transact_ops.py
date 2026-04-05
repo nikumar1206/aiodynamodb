@@ -7,6 +7,7 @@ from pydantic_core import TzInfo
 from aiodynamodb import (
     DynamoDB,
     DynamoModel,
+    HashKey,
     ProjectionAttr,
     TransactConditionCheck,
     TransactDelete,
@@ -117,9 +118,9 @@ async def test_transact_write_supports_update_operation(db):
 
 
 async def test_transact_write_update_serializes_timestamp_fields(db):
-    @table("transact_update_events", hash_key="event_id")
+    @table("transact_update_events")
     class Event(DynamoModel):
-        event_id: str
+        event_id: HashKey[str]
         processed_at: Timestamp | None = None
 
     await db.create_table(Event)

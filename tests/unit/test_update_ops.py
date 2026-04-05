@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic_core import TzInfo
 
-from aiodynamodb import DynamoModel, UpdateAttr, table
+from aiodynamodb import DynamoModel, HashKey, UpdateAttr, table
 from aiodynamodb.custom_types import Timestamp
 from tests.unit.entities import Basket, ComplexOrder, Item, User
 
@@ -21,9 +21,9 @@ async def test_update_supports_high_level_update_expression(db):
 
 
 async def test_update_serializes_timestamp_fields(db):
-    @table("update_events", hash_key="event_id")
+    @table("update_events")
     class Event(DynamoModel):
-        event_id: str
+        event_id: HashKey[str]
         processed_at: Timestamp | None = None
 
     await db.create_table(Event)
@@ -58,9 +58,9 @@ async def test_update_supports_nested_field_paths(db):
 
 
 async def test_update_supports_atomic_counter_increment(db):
-    @table("counter_values", hash_key="counter_id")
+    @table("counter_values")
     class Counter(DynamoModel):
-        counter_id: str
+        counter_id: HashKey[str]
         value: int = 0
 
     await db.create_table(Counter)
@@ -127,9 +127,9 @@ async def test_update_returns_none_without_return_values(db):
 
 
 async def test_update_supports_remove_add_and_delete_actions(db):
-    @table("counter_users", hash_key="user_id")
+    @table("counter_users")
     class CounterUser(DynamoModel):
-        user_id: str
+        user_id: HashKey[str]
         score: int = 0
         tags: set[str] | None = None
         email: str | None = None

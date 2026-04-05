@@ -59,9 +59,9 @@ class Address(BaseModel):
     city: str
 
 
-@table("profiles", hash_key="profile_id")
+@table("profiles")
 class Profile(DynamoModel):
-    profile_id: str
+    profile_id: HashKey[str]
     address: JSONStr[Address]  # stored as '{"street":"...","city":"..."}'
 ```
 

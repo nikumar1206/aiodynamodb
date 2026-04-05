@@ -1,13 +1,13 @@
 from pydantic import BaseModel
 
-from aiodynamodb import DynamoModel, table
+from aiodynamodb import DynamoModel, HashKey, RangeKey, table
 from aiodynamodb.custom_types import Timestamp
 from aiodynamodb.models import GSI, LSI
 
 
-@table("users", hash_key="user_id")
+@table("users")
 class User(DynamoModel):
-    user_id: str
+    user_id: HashKey[str]
     name: str
     email: str | None = None
 
@@ -24,10 +24,10 @@ order_lsi = LSI(
 )
 
 
-@table("orders", hash_key="order_id", range_key="created_at", indexes=[order_gsi, order_lsi])
+@table("orders", indexes=[order_gsi, order_lsi])
 class Order(DynamoModel):
-    order_id: str
-    created_at: str
+    order_id: HashKey[str]
+    created_at: RangeKey[str]
     total: int
 
 
@@ -41,9 +41,9 @@ class Basket(BaseModel):
     items: list[Item]
 
 
-@table("complex_orders", hash_key="order_id", range_key="created_at", indexes=[order_gsi, order_lsi])
+@table("complex_orders", indexes=[order_gsi, order_lsi])
 class ComplexOrder(DynamoModel):
-    order_id: str
-    created_at: Timestamp
+    order_id: HashKey[str]
+    created_at: RangeKey[Timestamp]
     total: int
     basket: Basket

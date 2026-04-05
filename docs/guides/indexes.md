@@ -7,7 +7,7 @@ DynamoDB supports two types of secondary indexes: Global Secondary Indexes (GSI)
 A GSI lets you query on a different partition key than the table's primary key.
 
 ```python
-from aiodynamodb import DynamoModel, table
+from aiodynamodb import DynamoModel, HashKey, RangeKey, table
 from aiodynamodb.models import GSI
 
 
@@ -18,15 +18,10 @@ order_by_status = GSI(
 )
 
 
-@table(
-    "orders",
-    hash_key="order_id",
-    range_key="created_at",
-    indexes=[order_by_status],
-)
+@table("orders", indexes=[order_by_status])
 class Order(DynamoModel):
-    order_id: str
-    created_at: str
+    order_id: HashKey[str]
+    created_at: RangeKey[str]
     status: str
     total: int
 ```
@@ -49,6 +44,7 @@ class Order(DynamoModel):
 An LSI shares the table's partition key but uses a different sort key. It must be created at table creation time.
 
 ```python
+from aiodynamodb import HashKey, RangeKey
 from aiodynamodb.models import LSI
 
 
@@ -58,15 +54,10 @@ order_lsi = LSI(
 )
 
 
-@table(
-    "orders",
-    hash_key="order_id",
-    range_key="created_at",
-    indexes=[order_lsi],
-)
+@table("orders", indexes=[order_lsi])
 class Order(DynamoModel):
-    order_id: str
-    created_at: str
+    order_id: HashKey[str]
+    created_at: RangeKey[str]
     total: int
 ```
 
@@ -82,21 +73,17 @@ class Order(DynamoModel):
 ## Combining GSI and LSI
 
 ```python
+from aiodynamodb import HashKey, RangeKey
 from aiodynamodb.models import GSI, LSI
 
 order_gsi = GSI(name="order_gsi", hash_key="order_id", range_key="total")
 order_lsi = LSI(name="order_lsi", range_key="total")
 
 
-@table(
-    "orders",
-    hash_key="order_id",
-    range_key="created_at",
-    indexes=[order_gsi, order_lsi],
-)
+@table("orders", indexes=[order_gsi, order_lsi])
 class Order(DynamoModel):
-    order_id: str
-    created_at: str
+    order_id: HashKey[str]
+    created_at: RangeKey[str]
     total: int
 ```
 

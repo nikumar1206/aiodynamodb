@@ -13,7 +13,7 @@ from collections.abc import AsyncGenerator
 import pytest
 from pydantic import BaseModel as PydanticModel
 
-from aiodynamodb import DynamoDB, DynamoModel, table
+from aiodynamodb import DynamoDB, DynamoModel, HashKey, RangeKey, table
 from aiodynamodb.custom_types import JSONStr, Timestamp
 from aiodynamodb.models import GSI, LSI
 
@@ -28,9 +28,9 @@ os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 # ---------------------------------------------------------------------------
 
 
-@table("it_users", hash_key="user_id")
+@table("it_users")
 class User(DynamoModel):
-    user_id: str
+    user_id: HashKey[str]
     name: str
     age: int | None = None
     email: str | None = None
@@ -41,10 +41,10 @@ status_gsi = GSI(name="status_idx", hash_key="status", range_key="total")
 created_lsi = LSI(name="created_idx", range_key="created_at")
 
 
-@table("it_orders", hash_key="order_id", range_key="created_at", indexes=[status_gsi, created_lsi])
+@table("it_orders", indexes=[status_gsi, created_lsi])
 class Order(DynamoModel):
-    order_id: str
-    created_at: str
+    order_id: HashKey[str]
+    created_at: RangeKey[str]
     total: int = 0
     status: str = "pending"
 
@@ -54,10 +54,10 @@ class Order(DynamoModel):
 event_priority_lsi = LSI(name="priority_idx", range_key="priority")
 
 
-@table("it_events", hash_key="event_id", range_key="timestamp", indexes=[event_priority_lsi])
+@table("it_events", indexes=[event_priority_lsi])
 class Event(DynamoModel):
-    event_id: str
-    timestamp: str
+    event_id: HashKey[str]
+    timestamp: RangeKey[str]
     priority: int
     message: str = ""
 
@@ -67,9 +67,9 @@ class Event(DynamoModel):
 product_category_gsi = GSI(name="category_idx", hash_key="category")
 
 
-@table("it_products", hash_key="product_id", indexes=[product_category_gsi])
+@table("it_products", indexes=[product_category_gsi])
 class Product(DynamoModel):
-    product_id: str
+    product_id: HashKey[str]
     name: str
     category: str | None = None
 
@@ -80,9 +80,9 @@ class Metadata(PydanticModel):
     tags: list[str]
 
 
-@table("it_typed_records", hash_key="record_id")
+@table("it_typed_records")
 class TypedRecord(DynamoModel):
-    record_id: str
+    record_id: HashKey[str]
     created_at: Timestamp  # datetime stored as unix-seconds integer
     metadata: JSONStr[Metadata]  # Pydantic model stored as a JSON string
 

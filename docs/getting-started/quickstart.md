@@ -5,16 +5,16 @@
 Every table maps to a `DynamoModel` subclass decorated with `@table`:
 
 ```python
-from aiodynamodb import DynamoModel, table
+from aiodynamodb import DynamoModel, HashKey, table
 
 
-@table("users", hash_key="user_id")
+@table("users")
 class User(DynamoModel):
-    user_id: str
+    user_id: HashKey[str]
     name: str
     email: str | None = None
 ```
-Under the hood `DynamoModel` is a small abstraction over pydantic's `BaseModel`. The `@table` decorator adds some additional ClassVars to support DynamoDB functionality.
+Under the hood `DynamoModel` is a small abstraction over pydantic's `BaseModel`. The `@table` decorator adds some additional ClassVars to support DynamoDB functionality. The `HashKey[str]` annotation marks `user_id` as the partition key.
 
 ## Create a client
 
@@ -39,12 +39,12 @@ await db.close()
 
 ```python
 import asyncio
-from aiodynamodb import DynamoDB, DynamoModel, table
+from aiodynamodb import DynamoDB, DynamoModel, HashKey, table
 
 
-@table("users", hash_key="user_id")
+@table("users")
 class User(DynamoModel):
-    user_id: str
+    user_id: HashKey[str]
     name: str
     email: str | None = None
 
