@@ -130,7 +130,7 @@ async def test_delete_removes_item(db):
     await db.put(User(user_id="u1", name="Alice"))
     assert await db.get(User, hash_key="u1") is not None
 
-    await db.delete(User(user_id="u1", name="Alice"))
+    await db.delete(User, hash_key="u1")
     assert await db.get(User, hash_key="u1") is None
 
 
@@ -139,25 +139,40 @@ async def test_delete_composite_key(db):
     await db.put(order)
     assert await db.get(Order, hash_key="o1", range_key="2026-01-01") is not None
 
-    await db.delete(order)
+    await db.delete(Order, hash_key="o1", range_key="2026-01-01")
     assert await db.get(Order, hash_key="o1", range_key="2026-01-01") is None
 
 
 async def test_delete_nonexistent_item_is_noop(db):
     # deleting a non-existent item should not raise
-    await db.delete(User(user_id="does-not-exist", name="Ghost"))
+    await db.delete(User, hash_key="does-not-exist")
 
 
 async def test_delete_with_condition_expression(db):
     await db.put(User(user_id="u1", name="Alice"))
     ex = await db.exceptions()
     with pytest.raises(ex.ConditionalCheckFailedException):
-        await db.delete(User(user_id="u1", name="Alice"), condition_expression=Attr("user_id").not_exists())
+        await db.delete(User, hash_key="u1", condition_expression=Attr("user_id").not_exists())
 
     assert await db.get(User, hash_key="u1") is not None
 
-    await db.delete(User(user_id="u1", name="Alice"), condition_expression=Attr("user_id").exists())
+    await db.delete(User, hash_key="u1", condition_expression=Attr("user_id").exists())
     assert await db.get(User, hash_key="u1") is None
+
+
+async def test_bytes_hash_key_roundtrip(db):
+    @table("binary_items", hash_key="key_id")
+    class BinaryItem(DynamoModel):
+        key_id: bytes
+        value: str
+
+    await db.create_table(BinaryItem)
+    await db.put(BinaryItem(key_id=b"mykey", value="hello"))
+
+    fetched = await db.get(BinaryItem, hash_key=b"mykey")
+    assert fetched is not None
+    assert fetched.key_id == b"mykey"
+    assert fetched.value == "hello"
 
 
 async def test_get_supports_specific_set_member(db):

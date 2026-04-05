@@ -29,3 +29,20 @@ async def test_create_table_rejects_unsupported_key_type(db):
 
     with pytest.raises(TypeError):
         await db.create_table(BadEvent)
+
+
+def test_table_decorator_rejects_unknown_hash_key():
+    with pytest.raises(ValueError, match="hash_key"):
+
+        @table("users", hash_key="nonexistent")
+        class Bad(DynamoModel):
+            user_id: str
+
+
+def test_table_decorator_rejects_unknown_range_key():
+    with pytest.raises(ValueError, match="range_key"):
+
+        @table("orders", hash_key="order_id", range_key="nonexistent")
+        class Bad(DynamoModel):
+            order_id: str
+            total: int
