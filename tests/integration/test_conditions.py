@@ -38,7 +38,8 @@ async def test_put_condition_attribute_equals(db):
 async def test_delete_condition_passes(db):
     await db.put(User(user_id="u1", name="Alice", age=30))
     await db.delete(
-        User(user_id="u1", name="Alice"),
+        User,
+        hash_key="u1",
         condition_expression=Attr("age").eq(30),
     )
     assert await db.get(User, hash_key="u1") is None
@@ -49,7 +50,8 @@ async def test_delete_condition_fails_item_survives(db):
     ex = await db.exceptions()
     with pytest.raises(ex.ConditionalCheckFailedException):
         await db.delete(
-            User(user_id="u1", name="Alice"),
+            User,
+            hash_key="u1",
             condition_expression=Attr("age").eq(99),
         )
     assert await db.get(User, hash_key="u1") is not None

@@ -21,13 +21,13 @@ async def test_put_overwrites_existing(db):
 
 async def test_delete_removes_item(db):
     await db.put(User(user_id="u1", name="Alice"))
-    await db.delete(User(user_id="u1", name="Alice"))
+    await db.delete(User, hash_key="u1")
     assert await db.get(User, hash_key="u1") is None
 
 
 async def test_delete_nonexistent_is_noop(db):
     # DynamoDB delete is idempotent — no error on missing item
-    await db.delete(User(user_id="ghost", name="Ghost"))
+    await db.delete(User, hash_key="ghost")
 
 
 async def test_put_and_get_composite_key(db):
@@ -80,7 +80,7 @@ async def test_delete_composite_key(db):
     await db.put(Order(order_id="o1", created_at="2026-01-02", total=200))
 
     # Delete only the first one; the second must remain untouched.
-    await db.delete(Order(order_id="o1", created_at="2026-01-01", total=100))
+    await db.delete(Order, hash_key="o1", range_key="2026-01-01")
 
     assert await db.get(Order, hash_key="o1", range_key="2026-01-01") is None
     assert await db.get(Order, hash_key="o1", range_key="2026-01-02") is not None

@@ -38,12 +38,14 @@ async def get_db():
 DynamoDI = Annotated[DynamoDB, Depends(get_db)]
 ```
 
+This works as FastAPI will automatically cache the FastAPI dependency and always return the same client.
+
 ## CRUD Example
 
 ```python
 from fastapi import FastAPI, HTTPException
 
-app = FastAPI(title="aiodynamodb + fastapi")
+app = FastAPI(title="aiodynamodb ❤️ fastapi")
 
 
 @app.get("/users/{user_id}", response_model=User)
@@ -58,22 +60,4 @@ async def get_user(user_id: int, db: DynamoDI):
 async def create_user(user: User, db: DynamoDI):
     await db.put(user)
     return user
-```
-
-## Notes & Best Practices
-
-- Avoid using `db = DynamoDB(session=Session())` without `async with` unless you manage `.close()` manually.
-- `Annotated[DynamoDB, Depends(get_db)]` makes DI reusable across multiple endpoints.
-- Returning `User` as `response_model` ensures FastAPI validates and serializes DynamoDB items correctly.
-- If `db.get(...)` returns `None`, return a 404. For condition failures, see [Exceptions](./exceptions.md).
-
-## Advanced: Using Secondary Indexes
-
-```python
-user = await db.query(
-    User,
-    index_name="email-index",
-    key_condition_expression="email = :email",
-    expression_values={":email": "alice@example.com"},
-)
 ```

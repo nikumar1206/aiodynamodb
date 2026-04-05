@@ -112,14 +112,12 @@ class DynamoModel(BaseModel):
 
     def to_dynamo(self) -> dict[str, Any]:
         """Serialize model fields to DynamoDB AttributeValue objects."""
-        dumped = self.model_dump(mode="json", exclude_none=True)
+        dumped = self.model_dump(mode="python", exclude_none=True)
         return {k: SERIALIZER._to_dynamo(v) for k, v in dumped.items()}
 
     def to_dynamo_compatible(self) -> dict[str, Any]:
-        """Serialize model fields to DynamoDB AttributeValue objects."""
-        dumped = self.model_dump(mode="json", exclude_none=True)
-        if not type(self)._has_float_fields:
-            return dumped
+        """Serialize model fields to a form accepted by boto3 resource put_item."""
+        dumped = self.model_dump(mode="python", exclude_none=True)
         return cast(dict[str, Any], _to_dynamo_compatible(dumped))
 
     @classmethod
@@ -147,6 +145,10 @@ def table(name: str, hash_key: str, range_key: str | None = None, indexes: list[
     """
 
     def decorator[T: DynamoModel](cls: type[T]) -> type[T]:
+        if hash_key not in cls.model_fields:
+            raise ValueError(f"hash_key '{hash_key}' is not a field on {cls.__name__}")
+        if range_key is not None and range_key not in cls.model_fields:
+            raise ValueError(f"range_key '{range_key}' is not a field on {cls.__name__}")
         idxs = indexes or []
         _validate_index_names(idxs, GSI)
         _validate_index_names(idxs, LSI)

@@ -62,7 +62,3 @@ Full documentation is available at **[aiodynamodb.com](https://aiodynamodb.com)*
 ```bash
 make test
 ```
-
-## AI Disclaimer
-
-Some code and content in this repository was created with the assistance of AI tools. All code is reviewed thoroughly.
