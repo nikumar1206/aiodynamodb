@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from pydantic_core import TzInfo
 from types_aiobotocore_dynamodb import DynamoDBClient
 
-from aiodynamodb import DynamoModel, table
+from aiodynamodb import DynamoModel, HashKey, RangeKey, table
 from aiodynamodb.custom_types import JSONStr, Timestamp, TimestampMillis
 from tests.unit.entities import Basket, Item
 
@@ -14,10 +14,10 @@ async def test_items_are_stored_in_the_correct_raw_format(db):
         f1: bool
         f2: str
 
-    @table("complex", hash_key="order_id", range_key="created_at")
+    @table("complex")
     class Complex(DynamoModel):
-        order_id: str
-        created_at: Timestamp
+        order_id: HashKey[str]
+        created_at: RangeKey[Timestamp]
         created_at_milli: TimestampMillis
         json_str: JSONStr[JsonData]
         total: int

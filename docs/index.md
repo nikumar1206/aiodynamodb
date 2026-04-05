@@ -25,12 +25,12 @@ pip install aiodynamodb
 
 ```python
 import asyncio
-from aiodynamodb import DynamoDB, DynamoModel, table
+from aiodynamodb import DynamoDB, DynamoModel, HashKey, table
 
 
-@table("users", hash_key="user_id")
+@table("users")
 class User(DynamoModel):
-    user_id: str
+    user_id: HashKey[str]
     name: str
     email: str | None = None
 

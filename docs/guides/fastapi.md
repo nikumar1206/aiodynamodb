@@ -11,12 +11,12 @@ pip install fastapi uvicorn aioboto3 aiodynamodb pydantic
 ## Define DynamoDB Models
 
 ```python
-from aiodynamodb import DynamoModel, table
+from aiodynamodb import DynamoModel, HashKey, table
 
 
-@table(name="foo", hash_key="id")
+@table("foo")
 class User(DynamoModel):
-    id: int
+    id: HashKey[int]
     name: str
     email: str
 ```

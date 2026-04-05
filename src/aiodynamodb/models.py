@@ -15,7 +15,7 @@ from types_aiobotocore_dynamodb.type_defs import (
 )
 
 from aiodynamodb._serializers import DESERIALIZER, SERIALIZER, _model_has_float_fields, _to_dynamo_compatible
-from aiodynamodb.custom_types import KeyT
+from aiodynamodb.custom_types import KeyT, _KeyMarker
 from aiodynamodb.projection import ProjectionExpressionArg
 from aiodynamodb.updates import UpdateAttr
 
@@ -127,10 +127,50 @@ class DynamoModel(BaseModel):
         return cls.model_validate(dynamo_dict)
 
 
-def table(name: str, hash_key: str, range_key: str | None = None, indexes: list[GSI | LSI] | None = None):
+def _extract_key_fields(cls: type["DynamoModel"]) -> tuple[str | None, str | None]:
+    """Scan model fields for ``HashKey`` / ``RangeKey`` annotation markers."""
+    hash_key_field: str | None = None
+    range_key_field: str | None = None
+    for field_name, field_info in cls.model_fields.items():
+        for meta in field_info.metadata:
+            if not isinstance(meta, _KeyMarker):
+                continue
+            if meta.kind == "hash":
+                if hash_key_field is not None:
+                    raise TypeError(
+                        f"Model {cls.__name__} has multiple HashKey fields: '{hash_key_field}' and '{field_name}'"
+                    )
+                hash_key_field = field_name
+            elif meta.kind == "range":
+                if range_key_field is not None:
+                    raise TypeError(
+                        f"Model {cls.__name__} has multiple RangeKey fields: '{range_key_field}' and '{field_name}'"
+                    )
+                range_key_field = field_name
+    return hash_key_field, range_key_field
+
+
+def table(
+    name: str,
+    *,
+    hash_key: str | None = None,
+    range_key: str | None = None,
+    indexes: list[GSI | LSI] | None = None,
+):
     """Decorator that attaches DynamoDB table metadata to a Pydantic model.
 
-    Usage:
+    Primary keys can be specified either via ``HashKey[T]`` / ``RangeKey[T]``
+    field annotations or via the ``hash_key`` / ``range_key`` string arguments.
+
+    Usage::
+
+        @table("users")
+        class User(DynamoModel):
+            user_id: HashKey[str]
+            name: str
+
+    Or equivalently::
+
         @table("users", hash_key="user_id")
         class User(DynamoModel):
             user_id: str
@@ -138,37 +178,67 @@ def table(name: str, hash_key: str, range_key: str | None = None, indexes: list[
 
     Args:
         name: DynamoDB table name.
-        hash_key: Partition key field name.
-        range_key: Optional sort key field name.
+        hash_key: Partition key field name. Omit when using ``HashKey[T]``.
+        range_key: Optional sort key field name. Omit when using ``RangeKey[T]``.
         indexes: Optional list of ``GSI`` and ``LSI`` metadata objects.
             Names must be unique per index type.
     """
 
     def decorator[T: DynamoModel](cls: type[T]) -> type[T]:
-        if hash_key not in cls.model_fields:
-            raise ValueError(f"hash_key '{hash_key}' is not a field on {cls.__name__}")
-        if range_key is not None and range_key not in cls.model_fields:
-            raise ValueError(f"range_key '{range_key}' is not a field on {cls.__name__}")
+        annotated_hash, annotated_range = _extract_key_fields(cls)
+
+        effective_hash = _resolve_key_source("hash_key", hash_key, annotated_hash, cls)
+        effective_range = _resolve_key_source("range_key", range_key, annotated_range, cls)
+
+        if effective_hash is None:
+            raise TypeError(
+                f"No hash key specified for {cls.__name__}. "
+                "Use HashKey[T] on a field or pass hash_key='field_name' to @table."
+            )
+        if effective_hash not in cls.model_fields:
+            raise ValueError(f"hash_key '{effective_hash}' is not a field on {cls.__name__}")
+        if effective_range is not None and effective_range not in cls.model_fields:
+            raise ValueError(f"range_key '{effective_range}' is not a field on {cls.__name__}")
+
         idxs = indexes or []
         _validate_index_names(idxs, GSI)
         _validate_index_names(idxs, LSI)
         cls.Meta = TableMeta(
             table_name=name,
-            hash_key=hash_key,
-            range_key=range_key,
+            hash_key=effective_hash,
+            range_key=effective_range,
             global_secondary_indexes={i.name: i for i in idxs if isinstance(i, GSI)},
             local_secondary_indexes={i.name: i for i in idxs if isinstance(i, LSI)},
         )
         cls._has_float_fields = _model_has_float_fields(cls)
         return cls
 
-    def _validate_index_names(_indexes: list[LSI | GSI], index_type: type[GSI | LSI]):
-        """Ensure index names are unique within a single index type."""
-        index_names = [i.name for i in _indexes if isinstance(i, index_type)]
-        if len(index_names) != len(set(index_names)):
-            raise ValueError("Index names must be unique")
-
     return decorator
+
+
+def _resolve_key_source(
+    key_name: str,
+    arg_value: str | None,
+    annotated_value: str | None,
+    cls: type,
+) -> str | None:
+    """Pick the key field name from either the decorator arg or annotation.
+
+    Raises ``TypeError`` if both sources are specified.
+    """
+    if arg_value is not None and annotated_value is not None:
+        raise TypeError(
+            f"Specify {key_name} for {cls.__name__} either via annotation or "
+            f"decorator argument, not both (got '{arg_value}' and '{annotated_value}')"
+        )
+    return arg_value or annotated_value
+
+
+def _validate_index_names(_indexes: list[LSI | GSI], index_type: type[GSI | LSI]) -> None:
+    """Ensure index names are unique within a single index type."""
+    index_names = [i.name for i in _indexes if isinstance(i, index_type)]
+    if len(index_names) != len(set(index_names)):
+        raise ValueError("Index names must be unique")
 
 
 @dataclass
