@@ -6,9 +6,6 @@ Async DynamoDB client + lightweight model layer built on `aioboto3` and Pydantic
 [![Python](https://img.shields.io/pypi/pyversions/aiodynamodb)](https://pypi.org/project/aiodynamodb/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## AI Disclaimer
-Some code and content in this repository was created with the assistance of AI tools. All code is reviewed thoroughly.
-
 ## Features
 
 - Fully async API built on `aioboto3`
@@ -17,6 +14,9 @@ Some code and content in this repository was created with the assistance of AI t
 - Persistent connection pooling via context manager
 - Query and scan with typed, paginated results
 - Conditional writes/deletes, transactions, and batch operations
+
+## AI Disclaimer
+Some code and content in this repository was created with the assistance of AI tools. All code is reviewed thoroughly.
 
 ## Installation
 
@@ -28,12 +28,12 @@ pip install aiodynamodb
 
 ```python
 import asyncio
-from aiodynamodb import DynamoDB, DynamoModel, table
+from aiodynamodb import DynamoDB, DynamoModel, HashKey, table
 
 
-@table("users", hash_key="user_id")
+@table("users")
 class User(DynamoModel):
-    user_id: str
+    user_id: HashKey[str]
     name: str
     email: str | None = None
 
@@ -57,8 +57,18 @@ Full documentation is available at **[aiodynamodb.com](https://aiodynamodb.com)*
 - [Guides](https://aiodynamodb.com/guides/) — CRUD, queries, scans, transactions, batch ops, custom types, and more
 - [API Reference](https://aiodynamodb.com/api-reference/)
 
-## Running Tests
+## Contributing
+
+Clone the repo and install dev dependencies:
 
 ```bash
-make test
+make install-dev
+```
+
+Make your changes, then:
+
+```bash
+make lint         # lint and format
+make typecheck    # type check
+make test         # run tests
 ```
