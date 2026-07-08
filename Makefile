@@ -27,6 +27,10 @@ typecheck: ## Run mypy type checks
 build: test ## Run tests and build the package
 	uv build
 
+.PHONY: docs
+docs: ## Build documentation
+	uv run --group docs zensical build
+
 .PHONY: help
 help: ## Show all available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'

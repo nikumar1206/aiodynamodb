@@ -2,7 +2,7 @@ import pytest
 from boto3.dynamodb.conditions import Attr
 
 from aiodynamodb import UpdateAttr
-from tests.integration.conftest import Order, User
+from tests.integration.conftest import Order, User, UserType, UserTypeT, UserVersion
 
 
 async def test_update_set_none_removes_attribute(db):
@@ -188,3 +188,30 @@ async def test_update_returns_all_old(db):
     current = await db.get(User, hash_key="u1")
     assert current.name == "Bob"
     assert current.age == 99
+
+
+async def test_update_supports_enum_hash_key(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+
+    updated = await db.update(
+        UserType,
+        hash_key=UserTypeT.bar,
+        update_expression={UpdateAttr("name").set("Alice Updated")},
+        return_values="ALL_NEW",
+    )
+
+    assert updated == UserType(user_type=UserTypeT.bar, name="Alice Updated")
+
+
+async def test_update_supports_enum_range_key(db):
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+
+    updated = await db.update(
+        UserVersion,
+        hash_key="u1",
+        range_key=UserTypeT.foo,
+        update_expression={UpdateAttr("name").set("Bob Updated")},
+        return_values="ALL_NEW",
+    )
+
+    assert updated == UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob Updated")

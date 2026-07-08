@@ -4,7 +4,7 @@ from pydantic_core import TzInfo
 
 from aiodynamodb import DynamoModel, HashKey, UpdateAttr, table
 from aiodynamodb.custom_types import Timestamp
-from tests.unit.entities import Basket, ComplexOrder, Item, User
+from tests.unit.entities import Basket, ComplexOrder, Item, User, UserType, UserTypeT, UserVersion
 
 
 async def test_update_supports_high_level_update_expression(db):
@@ -166,3 +166,30 @@ async def test_update_supports_remove_add_and_delete_actions(db):
         return_values="ALL_NEW",
     )
     assert after_delete.tags == {"a"}
+
+
+async def test_update_supports_enum_hash_key(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+
+    updated = await db.update(
+        UserType,
+        hash_key=UserTypeT.bar,
+        update_expression={UpdateAttr("name").set("Alice Updated")},
+        return_values="ALL_NEW",
+    )
+
+    assert updated == UserType(user_type=UserTypeT.bar, name="Alice Updated")
+
+
+async def test_update_supports_enum_range_key(db):
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+
+    updated = await db.update(
+        UserVersion,
+        hash_key="u1",
+        range_key=UserTypeT.foo,
+        update_expression={UpdateAttr("name").set("Bob Updated")},
+        return_values="ALL_NEW",
+    )
+
+    assert updated == UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob Updated")

@@ -1,8 +1,40 @@
+from enum import IntEnum, StrEnum
+
 from pydantic import BaseModel
 
 from aiodynamodb import DynamoModel, HashKey, RangeKey, table
 from aiodynamodb.custom_types import Timestamp
 from aiodynamodb.models import GSI, LSI
+
+
+class UserTypeT(IntEnum):
+    foo = 1
+    bar = 2
+
+
+class UserStatusT(StrEnum):
+    active = "active"
+    inactive = "inactive"
+
+
+@table("it_users_type")
+class UserType(DynamoModel):
+    user_type: HashKey[UserTypeT]
+    name: str
+    active: bool = True
+
+
+@table("it_user_versions")
+class UserVersion(DynamoModel):
+    user_id: HashKey[str]
+    user_type: RangeKey[UserTypeT]
+    name: str
+
+
+@table("it_status_users")
+class StatusUser(DynamoModel):
+    status: HashKey[UserStatusT]
+    name: str
 
 
 @table("users")

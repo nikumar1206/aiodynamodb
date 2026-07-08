@@ -9,6 +9,7 @@ LocalStack and let the default below kick in.
 import contextlib
 import os
 from collections.abc import AsyncGenerator
+from enum import IntEnum, StrEnum
 
 import pytest
 from pydantic import BaseModel as PydanticModel
@@ -35,6 +36,36 @@ class User(DynamoModel):
     age: int | None = None
     email: str | None = None
     active: bool = True
+
+
+class UserTypeT(IntEnum):
+    foo = 1
+    bar = 2
+
+
+class UserStatusT(StrEnum):
+    active = "active"
+    inactive = "inactive"
+
+
+@table("it_users_type")
+class UserType(DynamoModel):
+    user_type: HashKey[UserTypeT]
+    name: str
+    active: bool = True
+
+
+@table("it_user_versions")
+class UserVersion(DynamoModel):
+    user_id: HashKey[str]
+    user_type: RangeKey[UserTypeT]
+    name: str
+
+
+@table("it_status_users")
+class StatusUser(DynamoModel):
+    status: HashKey[UserStatusT]
+    name: str
 
 
 status_gsi = GSI(name="status_idx", hash_key="status", range_key="total")
@@ -98,10 +129,13 @@ async def db() -> AsyncGenerator[DynamoDB]:
     async with DynamoDB() as client:
         await client.create_table(User)
         await client.create_table(Order)
+        await client.create_table(UserType)
+        await client.create_table(UserVersion)
+        await client.create_table(StatusUser)
         try:
             yield client
         finally:
-            for model in (User, Order):
+            for model in (User, Order, UserType, UserVersion, StatusUser):
                 with contextlib.suppress(Exception):
                     await client.delete_table(model)
 

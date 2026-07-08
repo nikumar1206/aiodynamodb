@@ -49,12 +49,38 @@ The `hash_key` and `range_key` fields can be typed as:
 | `float` | Number (N) |
 | `bytes` | Binary (B) |
 | `datetime` | String (S) — ISO format |
+| `IntEnum` subclasses | Number (N) |
+| `StrEnum` subclasses | String (S) |
 | `Timestamp` | Number (N) — Unix seconds |
 | `TimestampMillis` | Number (N) — Unix milliseconds |
 | `TimestampMicros` | Number (N) — Unix microseconds |
 | `TimestampNanos` | Number (N) — Unix nanoseconds |
 
 See [Custom Types](../guides/custom-types.md) for timestamp and JSON field details.
+
+Enum key fields should inherit from `enum.IntEnum` or `enum.StrEnum`:
+
+```python
+from enum import IntEnum
+
+from aiodynamodb import DynamoModel, HashKey, RangeKey, table
+
+
+class UserType(IntEnum):
+    customer = 1
+    admin = 2
+
+
+@table("user_versions")
+class UserVersion(DynamoModel):
+    user_id: HashKey[str]
+    user_type: RangeKey[UserType]
+    name: str
+
+
+await db.put(UserVersion(user_id="u1", user_type=UserType.admin, name="Alice"))
+user = await db.get(UserVersion, hash_key="u1", range_key=UserType.admin)
+```
 
 ## Field types
 
