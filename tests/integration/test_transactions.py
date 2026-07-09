@@ -161,6 +161,7 @@ async def test_transact_get_supports_enum_keys_and_projection(db):
     assert results[1] is not None
     assert results[1].user_id == "u1"
     assert results[1].user_type is UserTypeT.foo
+    assert not hasattr(results[1], "name")
 
 
 async def test_transact_write_supports_enum_key_operations(db):
