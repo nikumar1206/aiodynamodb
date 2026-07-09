@@ -43,8 +43,8 @@ await db.create_table(
 
 | Python type | DynamoDB attribute type |
 |---|---|
-| `str`, `datetime` | String (S) |
-| `int`, `float`, `Timestamp`, `TimestampMillis`, `TimestampMicros`, `TimestampNanos` | Number (N) |
+| `str`, `datetime`, `StrEnum` subclasses | String (S) |
+| `int`, `float`, `IntEnum` subclasses, `Timestamp`, `TimestampMillis`, `TimestampMicros`, `TimestampNanos` | Number (N) |
 | `bytes` | Binary (B) |
 
 ## create_global_table

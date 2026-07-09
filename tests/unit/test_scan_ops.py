@@ -1,7 +1,7 @@
 from boto3.dynamodb.conditions import Attr
 
 from aiodynamodb import ProjectionAttr
-from tests.unit.entities import Order, User
+from tests.unit.entities import Order, User, UserType, UserTypeT
 
 
 async def test_scan_returns_all_items(db):
@@ -73,3 +73,20 @@ async def test_scan_index(db):
 
     assert len(items) == 2
     assert {i.order_id for i in items} == {"o1", "o2"}
+
+
+async def test_scan_supports_enum_key_filter_and_projection(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+    await db.put(UserType(user_type=UserTypeT.foo, name="Bob"))
+
+    items = [
+        item
+        async for page in db.scan(
+            UserType,
+            filter_expression=Attr("user_type").eq(UserTypeT.bar),
+            projection_expression=[ProjectionAttr("user_type"), ProjectionAttr("name")],
+        )
+        for item in page.items
+    ]
+
+    assert items == [UserType(user_type=UserTypeT.bar, name="Alice")]

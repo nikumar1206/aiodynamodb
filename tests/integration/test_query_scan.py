@@ -1,6 +1,7 @@
 from boto3.dynamodb.conditions import Attr, Key
 
-from tests.integration.conftest import Order, User
+from aiodynamodb import ProjectionAttr
+from tests.integration.conftest import Order, User, UserType, UserTypeT, UserVersion
 
 
 async def test_query_returns_items_for_partition(db):
@@ -127,3 +128,54 @@ async def test_scan_consistent_read(db):
     await db.put(User(user_id="u1", name="Alice"))
     items = [item async for page in db.scan(User, consistent_read=True) for item in page.items]
     assert len(items) == 1
+
+
+async def test_query_supports_enum_hash_key_condition(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+    await db.put(UserType(user_type=UserTypeT.foo, name="Bob"))
+
+    items = [
+        item
+        async for page in db.query(UserType, key_condition_expression=Key("user_type").eq(UserTypeT.bar))
+        for item in page.items
+    ]
+
+    assert items == [UserType(user_type=UserTypeT.bar, name="Alice")]
+
+
+async def test_query_supports_enum_range_key_condition_and_projection(db):
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.bar, name="Alice"))
+    await db.put(UserVersion(user_id="u2", user_type=UserTypeT.bar, name="Carol"))
+
+    items = [
+        item
+        async for page in db.query(
+            UserVersion,
+            key_condition_expression=Key("user_id").eq("u1") & Key("user_type").gte(UserTypeT.foo),
+            projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("user_type")],
+            scan_index_forward=True,
+        )
+        for item in page.items
+    ]
+
+    assert len(items) == 2
+    assert [item.user_type for item in items] == [UserTypeT.foo, UserTypeT.bar]
+    assert all(not hasattr(item, "name") for item in items)
+
+
+async def test_scan_supports_enum_key_filter_and_projection(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+    await db.put(UserType(user_type=UserTypeT.foo, name="Bob"))
+
+    items = [
+        item
+        async for page in db.scan(
+            UserType,
+            filter_expression=Attr("user_type").eq(UserTypeT.bar),
+            projection_expression=[ProjectionAttr("user_type"), ProjectionAttr("name")],
+        )
+        for item in page.items
+    ]
+
+    assert items == [UserType(user_type=UserTypeT.bar, name="Alice")]

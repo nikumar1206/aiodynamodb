@@ -53,6 +53,23 @@ class User(DynamoModel):
     name: str
 ```
 
+`HashKey[T]` and `RangeKey[T]` support the same key field types as table creation, including `IntEnum` and `StrEnum` subclasses:
+
+```python
+from enum import IntEnum
+
+
+class UserType(IntEnum):
+    customer = 1
+    admin = 2
+
+
+@table("users_by_type")
+class UserByType(DynamoModel):
+    user_type: HashKey[UserType]
+    user_id: RangeKey[str]
+```
+
 The legacy `hash_key="field"` / `range_key="field"` keyword arguments still work for backward compatibility.
 
 Index names must be unique within each index type.

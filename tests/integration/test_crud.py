@@ -1,4 +1,4 @@
-from tests.integration.conftest import Order, User
+from tests.integration.conftest import Order, StatusUser, User, UserStatusT, UserType, UserTypeT, UserVersion
 
 
 async def test_put_and_get(db):
@@ -17,6 +17,26 @@ async def test_put_overwrites_existing(db):
     await db.put(User(user_id="u1", name="Bob"))
     fetched = await db.get(User, hash_key="u1")
     assert fetched.name == "Bob"
+
+
+async def test_hash_key_enum(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+    await db.put(UserType(user_type=UserTypeT.foo, name="Bob"))
+    fetched = await db.get(UserType, hash_key=UserTypeT.bar)
+    assert fetched.name == "Alice"
+
+
+async def test_range_key_enum(db):
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.bar, name="Alice"))
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+    fetched = await db.get(UserVersion, hash_key="u1", range_key=UserTypeT.foo)
+    assert fetched.name == "Bob"
+
+
+async def test_str_enum_hash_key(db):
+    await db.put(StatusUser(status=UserStatusT.active, name="Alice"))
+    fetched = await db.get(StatusUser, hash_key=UserStatusT.active)
+    assert fetched == StatusUser(status=UserStatusT.active, name="Alice")
 
 
 async def test_delete_removes_item(db):
@@ -84,3 +104,14 @@ async def test_delete_composite_key(db):
 
     assert await db.get(Order, hash_key="o1", range_key="2026-01-01") is None
     assert await db.get(Order, hash_key="o1", range_key="2026-01-02") is not None
+
+
+async def test_delete_supports_enum_keys(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+
+    await db.delete(UserType, hash_key=UserTypeT.bar)
+    await db.delete(UserVersion, hash_key="u1", range_key=UserTypeT.foo)
+
+    assert await db.get(UserType, hash_key=UserTypeT.bar) is None
+    assert await db.get(UserVersion, hash_key="u1", range_key=UserTypeT.foo) is None

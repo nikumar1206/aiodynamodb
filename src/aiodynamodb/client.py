@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
+from enum import IntEnum, StrEnum
 from typing import Any, Literal, Self, assert_never, cast
 
 import aioboto3
@@ -67,6 +68,8 @@ _KEY_TO_TYPE = {
     str: "S",
     bytes: "B",
     int: "N",
+    IntEnum: "N",
+    StrEnum: "S",
     datetime: "S",
     float: "N",
     Timestamp: "N",
@@ -74,6 +77,22 @@ _KEY_TO_TYPE = {
     TimestampMicros: "N",
     TimestampNanos: "N",
 }
+
+
+def _key_attribute_type(annotation: Any, key_types: dict[Any, str]) -> Literal["B", "N", "S"] | None:
+    if annotation in key_types:
+        return cast(Literal["B", "N", "S"], key_types[annotation])
+    if not isinstance(annotation, type):
+        return None
+    for key_type, attribute_type in key_types.items():
+        if not isinstance(key_type, type):
+            continue
+        if annotation is bool and key_type is int:
+            continue
+        if issubclass(annotation, key_type):
+            return cast(Literal["B", "N", "S"], attribute_type)
+    return None
+
 
 type TransactWriteOperation = (
     TransactPut[DynamoModel]
@@ -567,7 +586,7 @@ class DynamoDB:
             if item is None:
                 results.append(None)
                 continue
-            results.append(_to_model(item, request.model, True))
+            results.append(_to_model(item, request.model, True, _partial=request.projection_expression is not None))
         if len(results) < len(requests):
             results.extend([None] * (len(requests) - len(results)))
         return results
@@ -800,12 +819,13 @@ class DynamoDB:
 
         def _add_attribute(field_name: str) -> None:
             annotation = _resolve_key_annotation(model.model_fields[field_name].annotation)
-            if annotation not in self.hash_key_types:
+            attribute_type = _key_attribute_type(annotation, self.hash_key_types)
+            if attribute_type is None:
                 raise TypeError(
                     f"Unsupported key type for field '{field_name}': {annotation!r}. "
                     f"Supported types are: {tuple(self.hash_key_types)}"
                 )
-            attribute_types[field_name] = cast(Literal["B", "N", "S"], self.hash_key_types[annotation])
+            attribute_types[field_name] = attribute_type
 
         key_schema: list[KeySchemaElementTypeDef] = [{"AttributeName": meta.hash_key, "KeyType": "HASH"}]
         _add_attribute(meta.hash_key)

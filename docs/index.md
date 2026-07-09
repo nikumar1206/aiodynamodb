@@ -23,6 +23,8 @@ pip install aiodynamodb
 
 ## Quick example
 
+Using a context manager:
+
 ```python
 import asyncio
 from aiodynamodb import DynamoDB, DynamoModel, HashKey, table
@@ -43,6 +45,32 @@ async def main() -> None:
         user = await db.get(User, hash_key="u1")
         print(user)  # User(user_id='u1', name='Alice', email='alice@example.com')
 
+
+asyncio.run(main())
+```
+
+Without using a context manager:
+
+```python
+import asyncio
+from aiodynamodb import DynamoDB, DynamoModel, HashKey, table
+
+
+@table("users")
+class User(DynamoModel):
+    user_id: HashKey[str]
+    name: str
+    email: str | None = None
+
+
+async def main() -> None:
+    db = DynamoDB()
+    await db.create_table(User)
+    await db.put(User(user_id="u1", name="Alice", email="alice@example.com"))
+
+    user = await db.get(User, hash_key="u1")
+    print(user)  # User(user_id='u1', name='Alice', email='alice@example.com')
+    db.close()
 
 asyncio.run(main())
 ```

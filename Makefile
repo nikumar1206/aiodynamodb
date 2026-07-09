@@ -12,6 +12,9 @@ test: install-dev lint typecheck ## Run tests
 	uv run coverage run
 	uv run coverage report
 
+.PHONY: it
+it: install-dev lint typecheck ## Run tests
+	uv run pytest tests/integration -v --tb=short
 
 .PHONY: lint
 lint: ## Lint
@@ -26,6 +29,10 @@ typecheck: ## Run mypy type checks
 .PHONY: build
 build: test ## Run tests and build the package
 	uv build
+
+.PHONY: docs
+docs: ## Build documentation
+	uv run --group docs zensical build
 
 .PHONY: help
 help: ## Show all available commands

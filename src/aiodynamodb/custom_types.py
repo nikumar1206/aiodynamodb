@@ -1,6 +1,7 @@
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, PlainSerializer
@@ -17,7 +18,7 @@ type JSONStr[T: BaseModel] = Annotated[
     BeforeValidator(lambda v: json.loads(v) if isinstance(v, str) else v),
 ]
 
-type KeyT = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime
+type KeyT = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime | IntEnum | StrEnum
 
 type ReturnValues = Literal["NONE", "ALL_OLD", "UPDATED_OLD", "ALL_NEW", "UPDATED_NEW"]
 
