@@ -5,7 +5,18 @@ from boto3.dynamodb.conditions import Attr
 from pydantic_core import TzInfo
 
 from aiodynamodb import DynamoModel, HashKey, ProjectionAttr, table
-from tests.unit.entities import Basket, ComplexOrder, Item, Order, User
+from tests.unit.entities import (
+    Basket,
+    ComplexOrder,
+    Item,
+    Order,
+    StatusUser,
+    User,
+    UserStatusT,
+    UserType,
+    UserTypeT,
+    UserVersion,
+)
 
 
 async def test_put_and_get(db):
@@ -188,3 +199,51 @@ async def test_get_supports_specific_set_member(db):
 
     assert fetched is not None
     assert "beta" in fetched.tags
+
+
+async def test_hash_key_enum(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+    await db.put(UserType(user_type=UserTypeT.foo, name="Bob"))
+    fetched = await db.get(UserType, hash_key=UserTypeT.bar)
+    assert fetched.name == "Alice"
+
+
+async def test_range_key_enum(db):
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.bar, name="Alice"))
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+    fetched = await db.get(UserVersion, hash_key="u1", range_key=UserTypeT.foo)
+    assert fetched.name == "Bob"
+
+
+async def test_str_enum_hash_key(db):
+    await db.put(StatusUser(status=UserStatusT.active, name="Alice"))
+
+    fetched = await db.get(StatusUser, hash_key=UserStatusT.active)
+
+    assert fetched == StatusUser(status=UserStatusT.active, name="Alice")
+
+
+async def test_delete_supports_enum_keys(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+
+    await db.delete(UserType, hash_key=UserTypeT.bar)
+    await db.delete(UserVersion, hash_key="u1", range_key=UserTypeT.foo)
+
+    assert await db.get(UserType, hash_key=UserTypeT.bar) is None
+    assert await db.get(UserVersion, hash_key="u1", range_key=UserTypeT.foo) is None
+
+
+async def test_get_projection_supports_enum_keys(db):
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+
+    fetched = await db.get(
+        UserVersion,
+        hash_key="u1",
+        range_key=UserTypeT.foo,
+        projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("user_type")],
+    )
+
+    assert fetched.user_id == "u1"
+    assert fetched.user_type is UserTypeT.foo
+    assert not hasattr(fetched, "name")

@@ -70,10 +70,12 @@ class Profile(DynamoModel):
 ## `KeyT`
 
 ```python
-type KeyT = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime
+type KeyT = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime | IntEnum | StrEnum
 ```
 
 Union type accepted by client method key parameters (`hash_key`, `range_key` arguments to `get()`, `update()`, `delete()`, and operation dataclasses). Not intended for use in model field annotations.
+
+`IntEnum` values are serialized as DynamoDB Number (N) key attributes. `StrEnum` values are serialized as DynamoDB String (S) key attributes.
 
 ---
 

@@ -1,7 +1,7 @@
 from boto3.dynamodb.conditions import Attr, Key
 
-from aiodynamodb import ProjectionAttr
-from tests.integration.conftest import Order, User
+from aiodynamodb import BatchGet, ProjectionAttr, TransactGet
+from tests.integration.conftest import Order, User, UserType, UserTypeT, UserVersion
 
 
 async def test_get_projection_returns_only_requested_fields(db):
@@ -156,3 +156,84 @@ async def test_scan_projection_with_filter(db):
     assert all(i.age >= 18 for i in items)
     assert all(isinstance(i.age, int) for i in items)
     assert all(i.email is None for i in items)  # not projected — falls back to default
+
+
+async def test_get_projection_supports_enum_keys(db):
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+
+    fetched = await db.get(
+        UserVersion,
+        hash_key="u1",
+        range_key=UserTypeT.foo,
+        projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("user_type")],
+    )
+
+    assert fetched.user_id == "u1"
+    assert fetched.user_type is UserTypeT.foo
+    assert not hasattr(fetched, "name")
+
+
+async def test_batch_get_projection_supports_enum_keys(db):
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+
+    result = await db.batch_get([
+        BatchGet(
+            UserVersion,
+            hash_key="u1",
+            range_key=UserTypeT.foo,
+            projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("user_type")],
+        ),
+    ])
+
+    fetched = result.items[UserVersion][0]
+    assert fetched.user_id == "u1"
+    assert fetched.user_type is UserTypeT.foo
+    assert not hasattr(fetched, "name")
+
+
+async def test_query_projection_supports_enum_keys(db):
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.bar, name="Alice"))
+
+    items = [
+        item
+        async for page in db.query(
+            UserVersion,
+            key_condition_expression=Key("user_id").eq("u1") & Key("user_type").gte(UserTypeT.foo),
+            projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("user_type")],
+        )
+        for item in page.items
+    ]
+
+    assert [item.user_type for item in items] == [UserTypeT.foo, UserTypeT.bar]
+    assert all(not hasattr(item, "name") for item in items)
+
+
+async def test_scan_projection_supports_enum_keys(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+
+    items = [
+        item
+        async for page in db.scan(
+            UserType,
+            filter_expression=Attr("user_type").eq(UserTypeT.bar),
+            projection_expression=[ProjectionAttr("user_type"), ProjectionAttr("name")],
+        )
+        for item in page.items
+    ]
+
+    assert items == [UserType(user_type=UserTypeT.bar, name="Alice")]
+
+
+async def test_transact_get_projection_supports_enum_keys(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+
+    results = await db.transact_get([
+        TransactGet(
+            UserType,
+            hash_key=UserTypeT.bar,
+            projection_expression=[ProjectionAttr("user_type"), ProjectionAttr("name")],
+        ),
+    ])
+
+    assert results == [UserType(user_type=UserTypeT.bar, name="Alice")]

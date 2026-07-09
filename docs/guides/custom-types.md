@@ -76,10 +76,35 @@ Use this when you want to store nested structured data as a string (for example,
 `KeyT` is the union of all types accepted as `hash_key` and `range_key` values in client method calls:
 
 ```python
-type KeyT = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime
+type KeyT = int | str | Timestamp | TimestampMillis | TimestampMicros | TimestampNanos | datetime | IntEnum | StrEnum
 ```
 
 You don't use `KeyT` in model field annotations — it's the type used by `db.get()`, `db.update()`, `db.delete()`, etc. for their key parameters.
+
+## Enum keys
+
+`IntEnum` and `StrEnum` subclasses can be used as `HashKey` or `RangeKey` field types. `IntEnum` values are stored as DynamoDB Number (N) attributes, and `StrEnum` values are stored as String (S) attributes.
+
+```python
+from enum import StrEnum
+
+from aiodynamodb import DynamoModel, HashKey, table
+
+
+class AccountStatus(StrEnum):
+    active = "active"
+    disabled = "disabled"
+
+
+@table("accounts")
+class Account(DynamoModel):
+    status: HashKey[AccountStatus]
+    name: str
+
+
+await db.put(Account(status=AccountStatus.active, name="Alice"))
+account = await db.get(Account, hash_key=AccountStatus.active)
+```
 
 ## ReturnValues
 

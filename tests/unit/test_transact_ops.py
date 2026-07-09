@@ -17,8 +17,9 @@ from aiodynamodb import (
     UpdateAttr,
     table,
 )
+from aiodynamodb.client import _to_model
 from aiodynamodb.custom_types import Timestamp
-from tests.unit.entities import Basket, ComplexOrder, Item, User
+from tests.unit.entities import Basket, ComplexOrder, Item, User, UserType, UserTypeT, UserVersion
 
 
 async def test_transact_write_applies_put_delete_and_condition(db):
@@ -156,3 +157,71 @@ async def test_transact_write_update_supports_nested_field_paths(db):
     updated = await db.get(ComplexOrder, hash_key="o1", range_key=created_at)
     assert updated is not None
     assert updated.basket.items[0].qty == 8
+
+
+async def test_transact_get_supports_enum_keys_and_projection(db):
+    await db.put(UserType(user_type=UserTypeT.bar, name="Alice"))
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+
+    results = await db.transact_get([
+        TransactGet(
+            UserType,
+            hash_key=UserTypeT.bar,
+            projection_expression=[ProjectionAttr("user_type"), ProjectionAttr("name")],
+        ),
+        TransactGet(
+            UserVersion,
+            hash_key="u1",
+            range_key=UserTypeT.foo,
+            projection_expression=[ProjectionAttr("user_id"), ProjectionAttr("user_type")],
+        ),
+    ])
+
+    assert results[0] == UserType(user_type=UserTypeT.bar, name="Alice")
+    assert results[1] is not None
+    assert results[1].user_id == "u1"
+    assert results[1].user_type is UserTypeT.foo
+
+
+def test_transact_get_projection_parses_partial_raw_enum_key_model():
+    parsed = _to_model(
+        {
+            "user_id": {"S": "u1"},
+            "user_type": {"N": "1"},
+        },
+        UserVersion,
+        True,
+        _partial=True,
+    )
+
+    assert parsed.user_id == "u1"
+    assert parsed.user_type is UserTypeT.foo
+    assert not hasattr(parsed, "name")
+
+
+async def test_transact_write_supports_enum_key_operations(db):
+    await db.put(UserType(user_type=UserTypeT.foo, name="Existing"))
+    await db.put(UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob"))
+
+    await db.transact_write([
+        TransactPut(UserType(user_type=UserTypeT.bar, name="Alice")),
+        TransactConditionCheck(
+            UserType,
+            hash_key=UserTypeT.foo,
+            condition_expression=Attr("name").exists(),
+        ),
+        TransactUpdate(
+            UserVersion,
+            hash_key="u1",
+            range_key=UserTypeT.foo,
+            update_expression={UpdateAttr("name").set("Bob Updated")},
+        ),
+    ])
+
+    await db.transact_write([
+        TransactDelete(UserType, hash_key=UserTypeT.bar),
+    ])
+
+    updated = await db.get(UserVersion, hash_key="u1", range_key=UserTypeT.foo)
+    assert updated == UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob Updated")
+    assert await db.get(UserType, hash_key=UserTypeT.bar) is None
