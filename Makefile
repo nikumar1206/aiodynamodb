@@ -12,6 +12,9 @@ test: install-dev lint typecheck ## Run tests
 	uv run coverage run
 	uv run coverage report
 
+.PHONY: it
+it: install-dev lint typecheck ## Run tests
+	uv run pytest tests/integration -v --tb=short
 
 .PHONY: lint
 lint: ## Lint

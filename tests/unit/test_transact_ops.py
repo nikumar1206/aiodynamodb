@@ -17,6 +17,7 @@ from aiodynamodb import (
     UpdateAttr,
     table,
 )
+from aiodynamodb.client import _to_model
 from aiodynamodb.custom_types import Timestamp
 from tests.unit.entities import Basket, ComplexOrder, Item, User, UserType, UserTypeT, UserVersion
 
@@ -180,6 +181,22 @@ async def test_transact_get_supports_enum_keys_and_projection(db):
     assert results[1] is not None
     assert results[1].user_id == "u1"
     assert results[1].user_type is UserTypeT.foo
+
+
+def test_transact_get_projection_parses_partial_raw_enum_key_model():
+    parsed = _to_model(
+        {
+            "user_id": {"S": "u1"},
+            "user_type": {"N": "1"},
+        },
+        UserVersion,
+        True,
+        _partial=True,
+    )
+
+    assert parsed.user_id == "u1"
+    assert parsed.user_type is UserTypeT.foo
+    assert not hasattr(parsed, "name")
 
 
 async def test_transact_write_supports_enum_key_operations(db):

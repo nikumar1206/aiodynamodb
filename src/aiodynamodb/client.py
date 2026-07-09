@@ -586,7 +586,7 @@ class DynamoDB:
             if item is None:
                 results.append(None)
                 continue
-            results.append(_to_model(item, request.model, True))
+            results.append(_to_model(item, request.model, True, _partial=request.projection_expression is not None))
         if len(results) < len(requests):
             results.extend([None] * (len(requests) - len(results)))
         return results
