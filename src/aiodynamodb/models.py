@@ -107,7 +107,6 @@ class DynamoModel(BaseModel):
     """Base for models decorated with @table."""
 
     Meta: ClassVar[TableMeta]
-    # we can skip traversing model for converting Decimal -> float at runtime if it doesn't have floats.
     _has_float_fields: ClassVar[bool] = False
 
     def to_dynamo(self) -> dict[str, Any]:
