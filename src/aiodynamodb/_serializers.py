@@ -1,6 +1,7 @@
 import typing
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 from typing import Any, cast, get_args, get_origin
 
 from boto3.dynamodb.types import Binary, TypeDeserializer, TypeSerializer
@@ -10,15 +11,10 @@ from aiodynamodb.custom_types import KeyT
 
 
 def _model_has_float_fields(model: type[BaseModel]) -> bool:
-    """Return True if any field in the model (recursively) has a float annotation.
-
-    Called once at @table decoration time and cached as a ClassVar so that
-    to_dynamo_compatible can skip the float→Decimal traversal for models
-    that never contain float values.
-    """
+    """Return whether a model contains float fields, including nested models."""
     for field_info in model.model_fields.values():
-        ann = field_info.annotation
-        args = get_args(ann) if get_origin(ann) is not None else (ann,)
+        annotation = field_info.annotation
+        args = get_args(annotation) if get_origin(annotation) is not None else (annotation,)
         for arg in args:
             if arg is float:
                 return True
@@ -46,9 +42,16 @@ def _resolve_key_annotation(annotation: Any) -> type:
 def _serialize_dynamo_primitives(value: Any) -> Any:
     """Recursively coerce Python values into forms boto3 can serialize.
 
+    - ``Enum`` -> its recursively normalized value
     - ``float`` → ``Decimal`` (DynamoDB Number requires Decimal)
     - ``datetime`` → ISO-8601 string (DynamoDB has no native datetime type)
+    - ``tuple`` → list
+
+    DynamoDB maps require string keys, and sets must be non-empty and contain
+    values of one scalar DynamoDB type.
     """
+    if isinstance(value, Enum):
+        return _serialize_dynamo_primitives(value.value)
     if isinstance(value, float):
         return Decimal(str(value))
     if isinstance(value, datetime):
@@ -57,11 +60,39 @@ def _serialize_dynamo_primitives(value: Any) -> Any:
         return [_serialize_dynamo_primitives(v) for v in value]
     if isinstance(value, tuple):
         return [_serialize_dynamo_primitives(v) for v in value]
-    if isinstance(value, set):
-        return {_serialize_dynamo_primitives(v) for v in value}
+    if isinstance(value, (set, frozenset)):
+        return _serialize_dynamo_set(value)
     if isinstance(value, dict):
+        for key in value:
+            if not isinstance(key, str):
+                raise TypeError(f"DynamoDB map keys must be strings, got {type(key).__name__}: {key!r}")
         return {k: _serialize_dynamo_primitives(v) for k, v in value.items()}
     return value
+
+
+def _serialize_dynamo_set(value: set[Any] | frozenset[Any]) -> set[Any]:
+    """Normalize and validate a DynamoDB string, number, or binary set."""
+    if not value:
+        raise ValueError("DynamoDB does not support empty sets")
+
+    normalized_values = [_serialize_dynamo_primitives(item) for item in value]
+    kinds = {_dynamo_set_kind(item) for item in normalized_values}
+    if None in kinds or len(kinds) != 1:
+        raise TypeError("DynamoDB sets must contain only strings, numbers, or bytes of a single type")
+    return set(normalized_values)
+
+
+def _dynamo_set_kind(value: Any) -> str | None:
+    """Return the DynamoDB scalar set kind for a normalized value."""
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, Decimal)):
+        return "number"
+    if isinstance(value, (bytes, Binary)):
+        return "binary"
+    return None
 
 
 def _to_dynamo_compatible(value: Any) -> Any:

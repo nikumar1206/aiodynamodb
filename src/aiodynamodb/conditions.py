@@ -4,7 +4,7 @@ from typing import Any, get_args, get_origin
 from boto3.dynamodb.conditions import ATTR_NAME_REGEX, AttributeBase, ConditionExpressionBuilder
 from pydantic import BaseModel
 
-from aiodynamodb._serializers import _serialize_custom_attribute
+from aiodynamodb._serializers import _serialize_custom_attribute, _to_dynamo_compatible
 
 
 class CustomConditionExpressionBuilder[T: BaseModel](ConditionExpressionBuilder):
@@ -35,11 +35,12 @@ class CustomConditionExpressionBuilder[T: BaseModel](ConditionExpressionBuilder)
     def _serialize_value(self, value: Any) -> Any:
         attribute_name = getattr(self, "_current_attribute_name", None)
         if not attribute_name:
-            return value
+            return _to_dynamo_compatible(value)
         try:
-            return _serialize_custom_attribute(self._model, attribute_name, value)
+            serialized = _serialize_custom_attribute(self._model, attribute_name, value)
         except (KeyError, TypeError, ValueError):
-            return value
+            serialized = value
+        return _to_dynamo_compatible(serialized)
 
     def _build_value_placeholder(
         self,

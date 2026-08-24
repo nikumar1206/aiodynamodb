@@ -10,7 +10,7 @@ Pydantic type annotations for `datetime` fields that control how datetimes are s
 ### `Timestamp`
 
 ```python
-type Timestamp = Annotated[datetime, PlainSerializer(lambda d: int(d.timestamp()))]
+type Timestamp = Annotated[datetime, PlainSerializer(_timestamp_seconds)]
 ```
 
 Serializes a `datetime` to Unix **seconds** (integer). Stored as DynamoDB Number (N).
@@ -18,7 +18,7 @@ Serializes a `datetime` to Unix **seconds** (integer). Stored as DynamoDB Number
 ### `TimestampMillis`
 
 ```python
-type TimestampMillis = Annotated[datetime, PlainSerializer(lambda d: int(d.timestamp() * 1_000))]
+type TimestampMillis = Annotated[datetime, PlainSerializer(_timestamp_milliseconds)]
 ```
 
 Serializes a `datetime` to Unix **milliseconds** (integer). Stored as DynamoDB Number (N).
@@ -26,7 +26,7 @@ Serializes a `datetime` to Unix **milliseconds** (integer). Stored as DynamoDB N
 ### `TimestampMicros`
 
 ```python
-type TimestampMicros = Annotated[datetime, PlainSerializer(lambda d: int(d.timestamp() * 1_000_000))]
+type TimestampMicros = Annotated[datetime, PlainSerializer(_timestamp_microseconds)]
 ```
 
 Serializes a `datetime` to Unix **microseconds** (integer). Stored as DynamoDB Number (N).
@@ -34,10 +34,13 @@ Serializes a `datetime` to Unix **microseconds** (integer). Stored as DynamoDB N
 ### `TimestampNanos`
 
 ```python
-type TimestampNanos = Annotated[datetime, PlainSerializer(lambda d: int(d.timestamp() * 1_000_000_000))]
+type TimestampNanos = Annotated[datetime, PlainSerializer(_timestamp_nanoseconds)]
 ```
 
 Serializes a `datetime` to Unix **nanoseconds** (integer). Stored as DynamoDB Number (N).
+
+All timestamp serializers use exact integer arithmetic. This avoids
+floating-point precision loss at microsecond and nanosecond resolutions.
 
 ---
 

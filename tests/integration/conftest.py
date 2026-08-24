@@ -9,10 +9,11 @@ LocalStack and let the default below kick in.
 import contextlib
 import os
 from collections.abc import AsyncGenerator
-from enum import IntEnum, StrEnum
+from enum import Enum, IntEnum, StrEnum
 
 import pytest
 from pydantic import BaseModel as PydanticModel
+from pydantic import Field
 
 from aiodynamodb import DynamoDB, DynamoModel, HashKey, RangeKey, table
 from aiodynamodb.custom_types import JSONStr, Timestamp
@@ -48,6 +49,15 @@ class UserStatusT(StrEnum):
     inactive = "inactive"
 
 
+class UserStatusGenericEnum(Enum):
+    active = "active"
+    inactive = "inactive"
+
+
+class OrderMetadata(PydanticModel):
+    user_status: UserStatusGenericEnum = UserStatusGenericEnum.active
+
+
 @table("it_users_type")
 class UserType(DynamoModel):
     user_type: HashKey[UserTypeT]
@@ -78,6 +88,7 @@ class Order(DynamoModel):
     created_at: RangeKey[str]
     total: int = 0
     status: str = "pending"
+    metadata: OrderMetadata = Field(default_factory=OrderMetadata)
 
 
 # Event — LSI range key (priority: int) differs from table range key (timestamp: str),

@@ -1,7 +1,9 @@
 from datetime import datetime
+from enum import Enum
 
 import pytest
 from boto3.dynamodb.conditions import Attr
+from pydantic import BaseModel
 from pydantic_core import TzInfo
 
 from aiodynamodb import DynamoModel, HashKey, ProjectionAttr, table
@@ -74,6 +76,27 @@ async def test_composite_key_put_and_get(db):
         "created_at": "2026-01-01T00:00:00",
         "total": 100,
     }
+
+
+async def test_nested_generic_enum_roundtrip(db):
+    class Status(Enum):
+        active = "active"
+
+    class Metadata(BaseModel):
+        status: Status
+
+    @table("nested_enum_orders")
+    class NestedEnumOrder(DynamoModel):
+        order_id: HashKey[str]
+        metadata: Metadata
+
+    await db.create_table(NestedEnumOrder)
+    order = NestedEnumOrder(order_id="o1", metadata=Metadata(status=Status.active))
+
+    await db.put(order)
+    await db.put(order, condition_expression=Attr("metadata.status").eq(Status.active))
+
+    assert await db.get(NestedEnumOrder, hash_key="o1") == order
 
 
 async def test_composite_key_different_range_keys(db):

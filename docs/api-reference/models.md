@@ -10,7 +10,7 @@ Base class for all table-mapped models. Inherits from Pydantic `BaseModel`.
 ```python
 class DynamoModel(BaseModel):
     Meta: ClassVar[TableMeta]  # set by @table()
-    _has_float_fields: ClassVar[bool]  # set by @table(), used for float→Decimal optimization
+    _has_float_fields: ClassVar[bool]  # cached model-shape metadata
 ```
 
 ### Methods
@@ -21,7 +21,7 @@ Serialize all fields to DynamoDB AttributeValue wire format (used by transact/ba
 
 #### `to_dynamo_compatible() -> dict[str, Any]`
 
-Serialize all fields to Python dict with `float` → `Decimal` coercion (used by table resource operations). Skips the coercion traversal if `_has_float_fields` is `False`.
+Recursively normalize all fields to DynamoDB-compatible Python values (used by table resource operations).
 
 #### `from_dynamo(raw: dict) -> Self` (classmethod)
 
