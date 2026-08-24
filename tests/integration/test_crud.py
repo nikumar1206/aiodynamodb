@@ -1,4 +1,14 @@
-from tests.integration.conftest import Order, StatusUser, User, UserStatusT, UserType, UserTypeT, UserVersion
+from tests.integration.conftest import (
+    Order,
+    OrderMetadata,
+    StatusUser,
+    User,
+    UserStatusGenericEnum,
+    UserStatusT,
+    UserType,
+    UserTypeT,
+    UserVersion,
+)
 
 
 async def test_put_and_get(db):
@@ -51,7 +61,13 @@ async def test_delete_nonexistent_is_noop(db):
 
 
 async def test_put_and_get_composite_key(db):
-    order = Order(order_id="o1", created_at="2026-01-01", total=100, status="shipped")
+    order = Order(
+        order_id="o1",
+        created_at="2026-01-01",
+        total=100,
+        status="shipped",
+        metadata=OrderMetadata(user_status=UserStatusGenericEnum.active),
+    )
     await db.put(order)
     fetched = await db.get(Order, hash_key="o1", range_key="2026-01-01")
     assert fetched == order

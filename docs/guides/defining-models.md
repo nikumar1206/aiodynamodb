@@ -84,7 +84,31 @@ user = await db.get(UserVersion, hash_key="u1", range_key=UserType.admin)
 
 ## Field types
 
-Any Pydantic-compatible field type works for non-key fields. Some examples:
+Non-key fields can use values that resolve to DynamoDB-compatible types during
+Pydantic's Python-mode serialization:
+
+| Python type | DynamoDB type |
+|---|---|
+| `None` | Null (NULL) |
+| `bool` | Boolean (BOOL) |
+| `str` | String (S) |
+| `int`, `float`, `Decimal` | Number (N) |
+| `bytes` | Binary (B) |
+| `datetime` | ISO-8601 String (S) |
+| `Enum` | The recursively serialized enum value |
+| `list`, `tuple` | List (L) |
+| Non-empty homogeneous `set`, `frozenset` | String, Number, or Binary Set (SS/NS/BS) |
+| `dict[str, T]`, nested Pydantic models | Map (M) |
+
+DynamoDB map keys must be strings. Sets cannot be empty and must contain only
+strings, numbers, or bytes of a single type.
+
+Other Pydantic-compatible types need a Python-mode `PlainSerializer` that
+returns one of the supported values above. A serializer configured only with
+`when_used="json"` is not applied because DynamoDB models are dumped in Python
+mode.
+
+Some examples:
 
 ```python
 from datetime import datetime
@@ -120,14 +144,12 @@ User.Meta.global_secondary_indexes  # {}
 User.Meta.local_secondary_indexes  # {}
 ```
 
-It also computes `_has_float_fields` once at decoration time — a cached flag used to skip the float → Decimal conversion traversal for models that contain no float fields, improving serialization performance.
-
 ## Serialization
 
 `DynamoModel` has two serialization paths:
 
 - `to_dynamo()` — serializes to DynamoDB AttributeValue objects (wire format, used by transact/batch operations)
-- `to_dynamo_compatible()` — serializes to Python dicts with `float` → `Decimal` coercion (used by table-level resource operations)
+- `to_dynamo_compatible()` — recursively normalizes values to DynamoDB-compatible Python types (used by table-level resource operations)
 - `from_dynamo(raw)` — deserializes from AttributeValue objects back to a model instance
 
 These are called internally by the client — you rarely need to invoke them directly.

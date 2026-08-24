@@ -1,15 +1,52 @@
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Annotated, Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, PlainSerializer
 
-type Timestamp = Annotated[datetime, PlainSerializer(lambda d: int(d.timestamp()))]
-type TimestampMillis = Annotated[datetime, PlainSerializer(lambda d: int(d.timestamp() * 1_000))]
-type TimestampMicros = Annotated[datetime, PlainSerializer(lambda d: int(d.timestamp() * 1_000_000))]
-type TimestampNanos = Annotated[datetime, PlainSerializer(lambda d: int(d.timestamp() * 1_000_000_000))]
+_UNIX_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+
+def _timestamp_microseconds(value: datetime) -> int:
+    """Return exact microseconds since the Unix epoch.
+
+    ``datetime.timestamp()`` returns a float, which loses precision when it is
+    scaled to nanoseconds. Naive datetimes retain Python's usual local-time
+    interpretation before conversion to UTC.
+    """
+    if value.tzinfo is None:
+        value = value.astimezone()
+    delta = value.astimezone(UTC) - _UNIX_EPOCH
+    return ((delta.days * 86_400 + delta.seconds) * 1_000_000) + delta.microseconds
+
+
+def _truncate_division(value: int, divisor: int) -> int:
+    """Divide an integer toward zero, matching ``int(datetime.timestamp())``."""
+    if value >= 0:
+        return value // divisor
+    return -((-value) // divisor)
+
+
+def _timestamp_seconds(value: datetime) -> int:
+    return _truncate_division(_timestamp_microseconds(value), 1_000_000)
+
+
+def _timestamp_milliseconds(value: datetime) -> int:
+    return _truncate_division(_timestamp_microseconds(value), 1_000)
+
+
+def _timestamp_nanoseconds(value: datetime) -> int:
+    return _timestamp_microseconds(value) * 1_000
+
+
+type Timestamp = Annotated[datetime, PlainSerializer(_timestamp_seconds)]
+type TimestampMillis = Annotated[datetime, PlainSerializer(_timestamp_milliseconds)]
+type TimestampMicros = Annotated[datetime, PlainSerializer(_timestamp_microseconds)]
+type TimestampNanos = Annotated[datetime, PlainSerializer(_timestamp_nanoseconds)]
+type DynamoUUID = Annotated[UUID, PlainSerializer(str)]
 
 
 type JSONStr[T: BaseModel] = Annotated[

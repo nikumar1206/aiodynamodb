@@ -6,12 +6,17 @@
 
 All timestamp types annotate a `datetime` field. They differ only in the integer precision stored in DynamoDB as a Number (N).
 
-| Type | DynamoDB storage | Formula |
+| Type | DynamoDB storage | Exact conversion |
 |---|---|---|
-| `Timestamp` | Unix seconds (int) | `int(d.timestamp())` |
-| `TimestampMillis` | Unix milliseconds (int) | `int(d.timestamp() * 1_000)` |
-| `TimestampMicros` | Unix microseconds (int) | `int(d.timestamp() * 1_000_000)` |
-| `TimestampNanos` | Unix nanoseconds (int) | `int(d.timestamp() * 1_000_000_000)` |
+| `Timestamp` | Unix seconds (int) | Truncate microseconds since epoch ÷ 1,000,000 |
+| `TimestampMillis` | Unix milliseconds (int) | Truncate microseconds since epoch ÷ 1,000 |
+| `TimestampMicros` | Unix microseconds (int) | Microseconds since epoch |
+| `TimestampNanos` | Unix nanoseconds (int) | Microseconds since epoch × 1,000 |
+
+The serializers use integer arithmetic internally, avoiding the rounding loss
+that occurs when a floating-point Unix timestamp is scaled to nanoseconds.
+Timezone-aware datetimes are recommended. As with `datetime.timestamp()`, a
+naive datetime is interpreted in the system's local timezone.
 
 ### Usage
 
@@ -105,6 +110,12 @@ class Account(DynamoModel):
 await db.put(Account(status=AccountStatus.active, name="Alice"))
 account = await db.get(Account, hash_key=AccountStatus.active)
 ```
+
+Plain `Enum` subclasses are also supported in non-key fields, including nested
+models and condition/filter expressions. Their values are recursively converted
+to DynamoDB-compatible values. Primary and secondary key enums must still use
+`IntEnum` or `StrEnum`, because DynamoDB key attributes can only be String,
+Number, or Binary values.
 
 ## ReturnValues
 
