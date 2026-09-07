@@ -113,7 +113,7 @@ async def update(
     model: type[T],
     *,
     hash_key: KeyT,
-    update_expression: set[UpdateAttr],
+    update_expression: Collection[UpdateAttr],
     range_key: KeyT | None = None,
     condition_expression: ConditionBase | None = None,
     return_values: ReturnValues | None = None,

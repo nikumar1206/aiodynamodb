@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from decimal import Decimal
@@ -38,12 +39,20 @@ class UpdateAttr(AttributeBase):
     _list_op: _ListOp | None = None
     _if_not_exists: bool = False
 
-    def set(self, value: Any) -> Self:
+    def set(self, value: Any, *, if_not_exists: bool = False) -> Self:
+        """Set the attribute to `value`; `None` removes it.
+
+        With `if_not_exists=True` the value is only written when the attribute
+        is currently absent (`SET path = if_not_exists(path, :value)`).
+        """
         if value is None:
+            if if_not_exists:
+                raise ValueError("if_not_exists cannot be combined with set(None); use remove()")
             self.type = Action.REMOVE
         else:
             self.value = value
             self.type = Action.SET
+            self._if_not_exists = if_not_exists
         return self
 
     def remove(self, index: int | None = None) -> Self:
@@ -150,6 +159,16 @@ def _freeze_hashable(value: Any) -> Any:
     return value
 
 
+def _path_segments(path: str) -> tuple[str, ...]:
+    """Split `a.b[1].c` into `("a", "b", "[1]", "c")` for overlap comparison."""
+    segments: list[str] = []
+    for part in path.split("."):
+        name, *indexes = part.split("[")
+        segments.append(name)
+        segments.extend(f"[{index}" for index in indexes)
+    return tuple(segments)
+
+
 @dataclass
 class BuiltUpdateExpression:
     update_expression: str
@@ -160,7 +179,17 @@ class BuiltUpdateExpression:
 class UpdateExpressionBuilder[T: BaseModel](CustomConditionExpressionBuilder[T]):
     """Build DynamoDB update expression with placeholders."""
 
-    def build_update_expression(self, expression: set[UpdateAttr]) -> BuiltUpdateExpression:
+    def build_update_expression(self, expression: Iterable[UpdateAttr]) -> BuiltUpdateExpression:
+        """Compile update actions into an expression, in iteration order.
+
+        Raises `ValueError` when two actions target the same or overlapping
+        document paths (for example `items` and `items[0]`), which DynamoDB
+        rejects at request time with a far less helpful message.
+        """
+        expression = list(expression)
+        if not expression:
+            raise ValueError("update_expression must contain at least one UpdateAttr action")
+        self._reject_overlapping_paths(expression)
         names: dict[str, str] = {}
         values: dict[str, Any] = {}
 
@@ -195,6 +224,21 @@ class UpdateExpressionBuilder[T: BaseModel](CustomConditionExpressionBuilder[T])
             expression_attribute_values=values,
         )
 
+    def _reject_overlapping_paths(self, expression: list[UpdateAttr]) -> None:
+        seen: list[tuple[str, tuple[str, ...]]] = []
+        for action in expression:
+            if not hasattr(action, "type"):
+                raise ValueError(f"UpdateAttr('{action.name}') has no action; call set/remove/add/delete/append on it")
+            segments = _path_segments(self._normalize_attribute_name(action.name))
+            for other_name, other_segments in seen:
+                shorter = min(len(segments), len(other_segments))
+                if segments[:shorter] == other_segments[:shorter]:
+                    raise ValueError(
+                        f"Update actions target overlapping paths '{other_name}' and '{action.name}'; "
+                        "DynamoDB allows each document path to appear only once per update"
+                    )
+            seen.append((action.name, segments))
+
     def _build_set_action(
         self,
         action: UpdateAttr,
@@ -205,6 +249,8 @@ class UpdateExpressionBuilder[T: BaseModel](CustomConditionExpressionBuilder[T])
         self._current_attribute_name = action.name
         value_placeholder = self._build_value_placeholder(action.value, values)
         if action._list_op is None:
+            if action._if_not_exists:
+                return f"{name_placeholder} = if_not_exists({name_placeholder}, {value_placeholder})"
             return f"{name_placeholder} = {value_placeholder}"
 
         existing = name_placeholder

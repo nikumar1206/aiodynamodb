@@ -18,14 +18,17 @@ UpdateAttr("roles").delete({"admin"})
 
 ### Action methods
 
-#### `.set(value: Any) -> UpdateAttr`
+#### `.set(value: Any, *, if_not_exists: bool = False) -> UpdateAttr`
 
-Set the attribute to a value.
+Set the attribute to a value. `set(None)` removes the attribute. With
+`if_not_exists=True` the value is written only when the attribute is absent
+(`SET path = if_not_exists(path, :value)`).
 
 ```python
 UpdateAttr("name").set("Alice Smith")
 UpdateAttr("address.city").set("New York")
 UpdateAttr("basket.items[1].qty").set(9)
+UpdateAttr("created_at").set(now, if_not_exists=True)
 ```
 
 #### `.append(value: list[Any], *, if_not_exists: bool = True) -> UpdateAttr`
@@ -93,9 +96,20 @@ UpdateAttr("roles").delete({"admin"})
 | List element | `UpdateAttr("items[0]")` | Zero-based list index |
 | Nested in list | `UpdateAttr("basket.items[1].qty")` | Combined path |
 
+Traversing a list field without an index (`"basket.items.qty"`) raises
+`ValueError`; the index must be explicit. The same rule applies to
+`ProjectionAttr` and condition/filter `Attr` paths.
+
+### Path uniqueness
+
+DynamoDB allows each document path to appear only once per update, and
+rejects overlapping paths (`items` together with `items[0]`, or `basket`
+together with `basket.total`). `UpdateExpressionBuilder` validates this
+up-front and raises `ValueError` naming both paths.
+
 ### Hashing
 
-`UpdateAttr` instances are used in `set[UpdateAttr]`, so they are hashable. The hash is based on the action type, attribute path, list-operation flags, and a frozen copy of the value.
+`UpdateAttr` instances are hashable so they can be passed in a `set`, though a `list` is preferred for deterministic clause order. The hash is based on the action type, attribute path, list-operation flags, and a frozen copy of the value.
 
 ---
 
@@ -117,6 +131,6 @@ Values map 1:1 to DynamoDB update clauses; `.append()` and `.prepend()` are
 
 ## `UpdateExpressionBuilder`
 
-Internal class used by the client to compile a `set[UpdateAttr]` into a DynamoDB `UpdateExpression` string with `ExpressionAttributeNames` and `ExpressionAttributeValues`.
+Internal class used by the client to compile a collection of `UpdateAttr` into a DynamoDB `UpdateExpression` string with `ExpressionAttributeNames` and `ExpressionAttributeValues`.
 
 You do not need to use this directly — it is invoked internally by `db.update()` and `TransactUpdate`.

@@ -1,3 +1,4 @@
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Self, cast
 
@@ -300,7 +301,7 @@ class TransactUpdate[T: DynamoModel]:
 
     model: type[T]
     hash_key: KeyT
-    update_expression: set[UpdateAttr]
+    update_expression: Collection[UpdateAttr]
     range_key: KeyT | None = None
     condition_expression: ConditionBase | None = None
 

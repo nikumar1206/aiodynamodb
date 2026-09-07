@@ -16,7 +16,9 @@ def test_projection_builder_serializes_top_level_attributes():
 
 
 def test_projection_builder_serializes_nested_list_paths():
-    built = ProjectionExpressionBuilder(ComplexOrder).build_projection_expression([ProjectionAttr("basket.items.qty")])
+    built = ProjectionExpressionBuilder(ComplexOrder).build_projection_expression([
+        ProjectionAttr("basket.items[0].qty")
+    ])
 
     assert built.projection_expression == "#n0.#n1[0].#n2"
     assert built.expression_attribute_names == {
@@ -37,3 +39,10 @@ def test_projection_builder_serializes_enum_key_attributes():
         "#n0": "user_id",
         "#n1": "user_type",
     }
+
+
+def test_projection_builder_rejects_list_traversal_without_index():
+    import pytest
+
+    with pytest.raises(ValueError, match="without an index"):
+        ProjectionExpressionBuilder(ComplexOrder).build_projection_expression([ProjectionAttr("basket.items.qty")])

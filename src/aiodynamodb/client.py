@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Collection
 from contextlib import asynccontextmanager
 from datetime import datetime
 from enum import IntEnum, StrEnum
@@ -294,7 +294,7 @@ class DynamoDB:
         model: type[T],
         *,
         hash_key: KeyT,
-        update_expression: set[UpdateAttr],
+        update_expression: Collection[UpdateAttr],
         range_key: KeyT | None = None,
         condition_expression: ConditionBase | None = None,
         return_values: ReturnValues | None = None,
@@ -304,8 +304,9 @@ class DynamoDB:
         Args:
             model: `DynamoModel` subclass mapped to the target table.
             hash_key: Partition key value.
-            update_expression: Set of `UpdateAttr(...)` actions describing the
-                update to apply.
+            update_expression: `UpdateAttr(...)` actions describing the update
+                to apply. Any collection works; a list keeps clause order
+                deterministic. Actions may not target overlapping paths.
             range_key: Sort key value, when the table defines one.
             condition_expression: Optional conditional expression.
             return_values: Optional DynamoDB return mode (for example,
