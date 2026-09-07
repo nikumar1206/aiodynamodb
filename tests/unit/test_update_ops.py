@@ -1,10 +1,67 @@
 from datetime import datetime
 
+import pytest
 from pydantic_core import TzInfo
 
 from aiodynamodb import DynamoModel, HashKey, UpdateAttr, table
 from aiodynamodb.custom_types import Timestamp
 from tests.unit.entities import Basket, ComplexOrder, Item, User, UserType, UserTypeT, UserVersion
+
+
+@pytest.mark.parametrize("initial", [[], [Item(qty=1, price=10.9, name="foo")]])
+async def test_update_appends_nested_list_and_combines_set(db, initial):
+    created_at = datetime(2020, 1, 1, tzinfo=TzInfo())
+    await db.put(ComplexOrder(order_id="o1", created_at=created_at, total=100, basket=Basket(items=initial)))
+    added = [Item(qty=2, price=5.5, name="bar"), Item(qty=3, price=2.5, name="baz")]
+
+    updated = await db.update(
+        ComplexOrder,
+        hash_key="o1",
+        range_key=created_at,
+        update_expression={UpdateAttr("basket.items").append(added), UpdateAttr("total").set(200)},
+        return_values="ALL_NEW",
+    )
+
+    assert updated is not None
+    assert updated.basket.items == initial + added
+    assert updated.total == 200
+
+
+@pytest.mark.parametrize("indexed_path", [False, True])
+async def test_update_removes_list_element_by_index(db, indexed_path):
+    items = [Item(qty=i, price=1, name=str(i)) for i in range(3)]
+    created_at = datetime(2020, 1, 1, tzinfo=TzInfo())
+    await db.put(ComplexOrder(order_id="o1", created_at=created_at, total=100, basket=Basket(items=items)))
+    action = UpdateAttr("basket.items[1]").remove() if indexed_path else UpdateAttr("basket.items").remove(1)
+
+    updated = await db.update(
+        ComplexOrder,
+        hash_key="o1",
+        range_key=created_at,
+        update_expression={action},
+        return_values="ALL_NEW",
+    )
+
+    assert updated is not None
+    assert updated.basket.items == [items[0], items[2]]
+
+
+@pytest.mark.parametrize("method", ["add", "delete"])
+def test_list_operands_rejected_for_set_actions(method):
+    with pytest.raises(TypeError):
+        getattr(UpdateAttr("items"), method)(["item"])
+
+
+@pytest.mark.parametrize("value", ["item", {"item"}, None])
+def test_append_requires_list(value):
+    with pytest.raises(TypeError, match="requires a list"):
+        UpdateAttr("items").append(value)
+
+
+@pytest.mark.parametrize("index, error", [(-1, ValueError), (True, TypeError), (1.5, TypeError), ("1", TypeError)])
+def test_remove_rejects_invalid_list_index(index, error):
+    with pytest.raises(error):
+        UpdateAttr("items").remove(index)
 
 
 async def test_update_supports_high_level_update_expression(db):
@@ -166,6 +223,66 @@ async def test_update_supports_remove_add_and_delete_actions(db):
         return_values="ALL_NEW",
     )
     assert after_delete.tags == {"a"}
+
+
+@pytest.mark.parametrize(
+    "initial, added, expected",
+    [
+        pytest.param(None, {"a"}, {"a"}, id="create-single-member"),
+        pytest.param(None, {"a", "b"}, {"a", "b"}, id="create-multiple-members"),
+        pytest.param({"a"}, {"b"}, {"a", "b"}, id="add-single-member"),
+        pytest.param({"a"}, {"b", "c"}, {"a", "b", "c"}, id="add-multiple-members"),
+        pytest.param({"a", "b"}, {"b", "c"}, {"a", "b", "c"}, id="deduplicate-members"),
+    ],
+)
+async def test_update_adds_set_members(db, initial, added, expected):
+    @table("set_additions")
+    class TaggedItem(DynamoModel):
+        item_id: HashKey[str]
+        tags: set[str] | None = None
+
+    await db.create_table(TaggedItem)
+    await db.put(TaggedItem(item_id="i1", tags=initial))
+
+    updated = await db.update(
+        TaggedItem,
+        hash_key="i1",
+        update_expression={UpdateAttr("tags").add(added)},
+        return_values="ALL_NEW",
+    )
+
+    assert updated == TaggedItem(item_id="i1", tags=expected)
+    assert await db.get(TaggedItem, hash_key="i1") == updated
+
+
+@pytest.mark.parametrize(
+    "removed, expected",
+    [
+        pytest.param({"b"}, {"a", "c"}, id="remove-single-member"),
+        pytest.param({"a", "c"}, {"b"}, id="remove-multiple-members"),
+        pytest.param({"missing"}, {"a", "b", "c"}, id="ignore-absent-member"),
+        pytest.param({"b", "missing"}, {"a", "c"}, id="remove-existing-and-absent-members"),
+        pytest.param({"a", "b", "c"}, None, id="remove-all-members"),
+    ],
+)
+async def test_update_deletes_set_members(db, removed, expected):
+    @table("set_deletions")
+    class TaggedItem(DynamoModel):
+        item_id: HashKey[str]
+        tags: set[str] | None = None
+
+    await db.create_table(TaggedItem)
+    await db.put(TaggedItem(item_id="i1", tags={"a", "b", "c"}))
+
+    updated = await db.update(
+        TaggedItem,
+        hash_key="i1",
+        update_expression={UpdateAttr("tags").delete(removed)},
+        return_values="ALL_NEW",
+    )
+
+    assert updated == TaggedItem(item_id="i1", tags=expected)
+    assert await db.get(TaggedItem, hash_key="i1") == updated
 
 
 async def test_update_supports_enum_hash_key(db):

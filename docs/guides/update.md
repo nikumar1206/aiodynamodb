@@ -71,6 +71,21 @@ Remove elements from a set field:
 
 ## Multiple actions in one call
 
+For lists, use `.append([...])` to append one or more elements to an existing
+list, and `.remove(index)` to remove an element by zero-based index:
+
+```python
+{UpdateAttr("items").append(["new", "another"])}
+{UpdateAttr("items").remove(1)}
+# Equivalent removal using an indexed path:
+{UpdateAttr("items[1]").remove()}
+```
+
+Append uses DynamoDB's `list_append` function within a `SET` clause and requires
+the target list to exist. Removal shifts subsequent elements down; removal by
+value is not supported. `.remove()` without an index removes the whole attribute.
+`.add()` and `.delete()` do not accept lists.
+
 Pass multiple `UpdateAttr` instances in the same set:
 
 ```python
