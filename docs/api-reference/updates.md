@@ -28,26 +28,42 @@ UpdateAttr("address.city").set("New York")
 UpdateAttr("basket.items[1].qty").set(9)
 ```
 
-#### `.remove() -> UpdateAttr`
+#### `.append(value: list[Any]) -> UpdateAttr`
+
+Append elements to an existing list using `SET path = list_append(path, value)`.
+Pass a list, even when appending a single element. The target list must exist.
+
+```python
+UpdateAttr("basket.items").append([Item(qty=1, price=2.5, name="new")])
+```
+
+#### `.remove(index: int | None = None) -> UpdateAttr`
 
 Remove the attribute entirely (equivalent to DynamoDB `REMOVE`).
 
 ```python
 UpdateAttr("email").remove()
+UpdateAttr("basket.items").remove(1)
+UpdateAttr("basket.items[1]").remove()  # equivalent indexed removal
 ```
 
-#### `.add(value: Any) -> UpdateAttr`
+List elements are removed by zero-based, non-negative index, not by value.
+Subsequent elements shift down. Omitting the index removes the whole attribute.
+
+#### `.add(value: int | float | Decimal | set[Any]) -> UpdateAttr`
 
 Add a number to a numeric attribute, or add elements to a DynamoDB set.
+List operands are rejected; use `.append([...])` for lists.
 
 ```python
 UpdateAttr("login_count").add(1)
 UpdateAttr("tags").add({"new-tag"})
 ```
 
-#### `.delete(value: Any) -> UpdateAttr`
+#### `.delete(value: set[Any]) -> UpdateAttr`
 
 Remove elements from a DynamoDB set attribute.
+List operands are rejected; use `.remove(index)` for list elements.
 
 ```python
 UpdateAttr("roles").delete({"admin"})
@@ -76,9 +92,11 @@ class Action(Enum):
     REMOVE = "REMOVE"
     ADD = "ADD"
     DELETE = "DELETE"
+    APPEND = "APPEND"
 ```
 
 The action type set on an `UpdateAttr` after calling one of its action methods.
+`APPEND` compiles into a DynamoDB `SET` clause with `list_append`.
 
 ---
 

@@ -1,4 +1,6 @@
+import builtins
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import Enum
 from typing import Any, Self
 
@@ -13,6 +15,7 @@ class Action(Enum):
     REMOVE = "REMOVE"
     ADD = "ADD"
     DELETE = "DELETE"
+    APPEND = "APPEND"
 
 
 class UpdateAttr(AttributeBase):
@@ -33,16 +36,37 @@ class UpdateAttr(AttributeBase):
             self.type = Action.SET
         return self
 
-    def remove(self) -> Self:
+    def remove(self, index: int | None = None) -> Self:
+        """Remove the whole attribute, or a list element at a zero-based index."""
+        if index is not None:
+            if isinstance(index, bool) or not isinstance(index, int):
+                raise TypeError("List index must be an integer")
+            if index < 0:
+                raise ValueError("List index must be non-negative")
+            self.name = f"{self.name}[{index}]"
         self.type = Action.REMOVE
         return self
 
-    def add(self, value: Any) -> Self:
+    def append(self, value: list[Any]) -> Self:
+        """Append a list of elements to an existing list attribute."""
+        if not isinstance(value, list):
+            raise TypeError("APPEND requires a list of elements")
+        self.value = value
+        self.type = Action.APPEND
+        return self
+
+    def add(self, value: int | float | Decimal | builtins.set[Any]) -> Self:
+        """Add a number or set members; lists require append()."""
+        if isinstance(value, bool) or not isinstance(value, int | float | Decimal | set):
+            raise TypeError("ADD requires a number or set; use append() for lists")
         self.value = value
         self.type = Action.ADD
         return self
 
-    def delete(self, value: Any) -> Self:
+    def delete(self, value: builtins.set[Any]) -> Self:
+        """Delete set members; list elements must be removed by index."""
+        if not isinstance(value, set):
+            raise TypeError("DELETE requires a set; use remove(index) for list elements")
         self.value = value
         self.type = Action.DELETE
         return self
@@ -77,6 +101,8 @@ class _DeleteAction:
 def _freeze_hashable(value: Any) -> Any:
     # UpdateAttr instances live in sets, so nested mutable values must be
     # converted into deterministic hashable shapes before hashing.
+    if isinstance(value, BaseModel):
+        return _freeze_hashable(value.model_dump())
     if isinstance(value, dict):
         return tuple(sorted((k, _freeze_hashable(v)) for k, v in value.items()))
     if isinstance(value, list | tuple):
@@ -101,7 +127,9 @@ class UpdateExpressionBuilder[T: BaseModel](CustomConditionExpressionBuilder[T])
         values: dict[str, Any] = {}
 
         set_parts = [
-            self._build_set_action(action, names, values) for action in expression if action.type == Action.SET
+            self._build_set_action(action, names, values)
+            for action in expression
+            if action.type in (Action.SET, Action.APPEND)
         ]
         remove_parts = [
             self._build_name_placeholder(action, names) for action in expression if action.type == Action.REMOVE
@@ -140,6 +168,8 @@ class UpdateExpressionBuilder[T: BaseModel](CustomConditionExpressionBuilder[T])
         name_placeholder = self._build_name_placeholder(action, names)
         self._current_attribute_name = action.name
         value_placeholder = self._build_value_placeholder(action.value, values)
+        if action.type == Action.APPEND:
+            return f"{name_placeholder} = list_append({name_placeholder}, {value_placeholder})"
         return f"{name_placeholder} = {value_placeholder}"
 
     def _build_add_delete_action(
