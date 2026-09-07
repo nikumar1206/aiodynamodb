@@ -20,7 +20,7 @@ class Action(Enum):
 
 
 class _ListOp(Enum):
-    """Internal marker for ``SET`` actions that use ``list_append``."""
+    """Internal marker for `SET` actions that use `list_append`."""
 
     APPEND = "append"
     PREPEND = "prepend"
@@ -29,7 +29,7 @@ class _ListOp(Enum):
 class UpdateAttr(AttributeBase):
     """DynamoDB update attribute path.
 
-    This inherits from boto3 ``AttributeBase`` so placeholder handling can reuse
+    This inherits from boto3 `AttributeBase` so placeholder handling can reuse
     the same builder machinery as condition expressions.
     """
 
@@ -63,18 +63,18 @@ class UpdateAttr(AttributeBase):
         return self
 
     def append(self, value: list[Any], *, if_not_exists: bool = True) -> Self:
-        """Append elements to a list attribute (``SET path = list_append(path, value)``).
+        """Append elements to a list attribute (`SET path = list_append(path, value)`).
 
         By default a missing list is treated as empty so the first append creates it.
-        Pass ``if_not_exists=False`` to require the list to already exist.
+        Pass `if_not_exists=False` to require the list to already exist.
         """
         return self._list_append(value, _ListOp.APPEND, if_not_exists)
 
     def prepend(self, value: list[Any], *, if_not_exists: bool = True) -> Self:
-        """Prepend elements to a list attribute (``SET path = list_append(value, path)``).
+        """Prepend elements to a list attribute (`SET path = list_append(value, path)`).
 
         By default a missing list is treated as empty so the first prepend creates it.
-        Pass ``if_not_exists=False`` to require the list to already exist.
+        Pass `if_not_exists=False` to require the list to already exist.
         """
         return self._list_append(value, _ListOp.PREPEND, if_not_exists)
 

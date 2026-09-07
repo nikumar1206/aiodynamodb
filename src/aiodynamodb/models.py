@@ -24,7 +24,7 @@ type Raw = dict[str, Any]
 
 @dataclass
 class GSI:
-    """Global secondary index definition used in ``@table(..., indexes=[...])``."""
+    """Global secondary index definition used in `@table(..., indexes=[...])`."""
 
     name: str
     hash_key: str
@@ -36,11 +36,11 @@ class GSI:
     warm_throughput: None | WarmThroughputTypeDef = None
 
     def to_dynamo(self) -> GlobalSecondaryIndexUnionTypeDef:
-        """Serialize this GSI definition to DynamoDB ``create_table`` format.
+        """Serialize this GSI definition to DynamoDB `create_table` format.
 
         Returns:
-            A ``GlobalSecondaryIndexes`` entry compatible with
-            ``CreateTable``.
+            A `GlobalSecondaryIndexes` entry compatible with
+            `CreateTable`.
         """
         key_schema: list[KeySchemaElementTypeDef] = [{"AttributeName": self.hash_key, "KeyType": "HASH"}]
         if self.range_key:
@@ -63,7 +63,7 @@ class GSI:
 
 @dataclass
 class LSI:
-    """Local secondary index definition used in ``@table(..., indexes=[...])``."""
+    """Local secondary index definition used in `@table(..., indexes=[...])`."""
 
     name: str
     range_key: str
@@ -71,13 +71,13 @@ class LSI:
     non_key_attributes: list[str] | None = None
 
     def to_dynamo(self, hash_key: str) -> LocalSecondaryIndexTypeDef:
-        """Serialize this LSI definition to DynamoDB ``create_table`` format.
+        """Serialize this LSI definition to DynamoDB `create_table` format.
 
         Args:
             hash_key: Table hash key name required in every LSI key schema.
 
         Returns:
-            A ``LocalSecondaryIndexes`` entry compatible with ``CreateTable``.
+            A `LocalSecondaryIndexes` entry compatible with `CreateTable`.
         """
         _dict: LocalSecondaryIndexTypeDef = {
             "IndexName": self.name,
@@ -94,7 +94,7 @@ class LSI:
 
 @dataclass
 class TableMeta:
-    """Model-to-table metadata attached by the ``@table`` decorator."""
+    """Model-to-table metadata attached by the `@table` decorator."""
 
     table_name: str
     hash_key: str
@@ -127,7 +127,7 @@ class DynamoModel(BaseModel):
 
 
 def _extract_key_fields(cls: type["DynamoModel"]) -> tuple[str | None, str | None]:
-    """Scan model fields for ``HashKey`` / ``RangeKey`` annotation markers."""
+    """Scan model fields for `HashKey` / `RangeKey` annotation markers."""
     hash_key_field: str | None = None
     range_key_field: str | None = None
     for field_name, field_info in cls.model_fields.items():
@@ -158,8 +158,8 @@ def table(
 ):
     """Decorator that attaches DynamoDB table metadata to a Pydantic model.
 
-    Primary keys can be specified either via ``HashKey[T]`` / ``RangeKey[T]``
-    field annotations or via the ``hash_key`` / ``range_key`` string arguments.
+    Primary keys can be specified either via `HashKey[T]` / `RangeKey[T]`
+    field annotations or via the `hash_key` / `range_key` string arguments.
 
     Usage::
 
@@ -177,9 +177,9 @@ def table(
 
     Args:
         name: DynamoDB table name.
-        hash_key: Partition key field name. Omit when using ``HashKey[T]``.
-        range_key: Optional sort key field name. Omit when using ``RangeKey[T]``.
-        indexes: Optional list of ``GSI`` and ``LSI`` metadata objects.
+        hash_key: Partition key field name. Omit when using `HashKey[T]`.
+        range_key: Optional sort key field name. Omit when using `RangeKey[T]`.
+        indexes: Optional list of `GSI` and `LSI` metadata objects.
             Names must be unique per index type.
     """
 
@@ -223,7 +223,7 @@ def _resolve_key_source(
 ) -> str | None:
     """Pick the key field name from either the decorator arg or annotation.
 
-    Raises ``TypeError`` if both sources are specified.
+    Raises `TypeError` if both sources are specified.
     """
     if arg_value is not None and annotated_value is not None:
         raise TypeError(
@@ -250,9 +250,9 @@ class QueryResult[T: DynamoModel]:
 
 @dataclass(frozen=True)
 class TransactGet[T: DynamoModel]:
-    """Single item read request used by ``transact_get``.
+    """Single item read request used by `transact_get`.
 
-    Note: ``transact_get_items`` is always strongly consistent — there is no
+    Note: `transact_get_items` is always strongly consistent — there is no
     per-item consistency setting in the DynamoDB API.
     """
 
@@ -264,7 +264,7 @@ class TransactGet[T: DynamoModel]:
 
 @dataclass(frozen=True)
 class TransactPut[T: DynamoModel]:
-    """Put operation used by ``transact_write``."""
+    """Put operation used by `transact_write`."""
 
     item: T
     condition_expression: ConditionBase | None = None
@@ -276,7 +276,7 @@ class TransactPut[T: DynamoModel]:
 
 @dataclass(frozen=True)
 class TransactDelete[T: DynamoModel]:
-    """Delete operation used by ``transact_write``."""
+    """Delete operation used by `transact_write`."""
 
     model: type[T]
     hash_key: KeyT
@@ -286,7 +286,7 @@ class TransactDelete[T: DynamoModel]:
 
 @dataclass(frozen=True)
 class TransactConditionCheck[T: DynamoModel]:
-    """Condition-check operation used by ``transact_write``."""
+    """Condition-check operation used by `transact_write`."""
 
     model: type[T]
     hash_key: KeyT
@@ -296,7 +296,7 @@ class TransactConditionCheck[T: DynamoModel]:
 
 @dataclass(frozen=True)
 class TransactUpdate[T: DynamoModel]:
-    """Update operation used by ``transact_write``."""
+    """Update operation used by `transact_write`."""
 
     model: type[T]
     hash_key: KeyT
@@ -307,7 +307,7 @@ class TransactUpdate[T: DynamoModel]:
 
 @dataclass(frozen=True)
 class BatchGet[T: DynamoModel]:
-    """Single item read request used by ``batch_get``."""
+    """Single item read request used by `batch_get`."""
 
     model: type[T]
     hash_key: KeyT
@@ -318,7 +318,7 @@ class BatchGet[T: DynamoModel]:
 
 @dataclass(frozen=True)
 class BatchPut[T: DynamoModel]:
-    """Put operation used by ``batch_write``."""
+    """Put operation used by `batch_write`."""
 
     item: T
 
@@ -329,7 +329,7 @@ class BatchPut[T: DynamoModel]:
 
 @dataclass(frozen=True)
 class BatchDelete[T: DynamoModel]:
-    """Delete operation used by ``batch_write``."""
+    """Delete operation used by `batch_write`."""
 
     model: type[T]
     hash_key: KeyT
@@ -338,7 +338,7 @@ class BatchDelete[T: DynamoModel]:
 
 @dataclass
 class BatchGetResult[T: DynamoModel]:
-    """Typed result returned by ``batch_get``."""
+    """Typed result returned by `batch_get`."""
 
     items: dict[type[T], list[T]]
     unprocessed_keys: dict[str, Any]
@@ -346,6 +346,6 @@ class BatchGetResult[T: DynamoModel]:
 
 @dataclass
 class BatchWriteResult:
-    """Result returned by ``batch_write``."""
+    """Result returned by `batch_write`."""
 
     unprocessed_items: dict[str, list[WriteRequestOutputTypeDef]]

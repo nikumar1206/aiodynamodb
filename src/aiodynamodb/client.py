@@ -109,8 +109,8 @@ _partial_field_type_adapters: dict[tuple[type[DynamoModel], str], TypeAdapter[An
 def _to_partial_model[T: DynamoModel](item: Raw, model: type[T]) -> T:
     """Construct a model from a partial item (e.g. a projected result).
 
-    Fields present in ``item`` are validated and coerced (so Decimal becomes
-    int, etc.).  Fields absent from ``item`` fall back to their declared
+    Fields present in `item` are validated and coerced (so Decimal becomes
+    int, etc.).  Fields absent from `item` fall back to their declared
     default; required fields with no default are simply left unset on the
     resulting instance.
     """
@@ -136,7 +136,7 @@ def _to_model[T: DynamoModel](item: Raw, model: type[T], _is_raw_dynamo: bool = 
             return _to_partial_model(deserialized, model)
         return model.from_dynamo(item)
     # boto3 resource responses may contain Binary wrappers that Pydantic cannot
-    # validate as ``bytes`` directly — unwrap them first.
+    # validate as `bytes` directly — unwrap them first.
     item = _unwrap_binary(item)
     if _partial:
         return _to_partial_model(item, model)
@@ -149,9 +149,9 @@ def _merge_expression_attribute_names(
 ) -> dict[str, str] | None:
     """Merge name placeholders and reject conflicting placeholder reuse.
 
-    DynamoDB requires a placeholder like ``#n0`` to always refer to the same
+    DynamoDB requires a placeholder like `#n0` to always refer to the same
     attribute name within a single request. This helper preserves existing
-    mappings, adds new ones, and raises ``ValueError`` if the same placeholder
+    mappings, adds new ones, and raises `ValueError` if the same placeholder
     is bound to a different attribute.
     """
     if not existing:
@@ -169,9 +169,9 @@ def _merge_expression_attribute_names(
 
 
 class DynamoDB:
-    """Async DynamoDB client for working with ``DynamoModel`` entities.
+    """Async DynamoDB client for working with `DynamoModel` entities.
 
-    The client maps model metadata from ``model.Meta`` to DynamoDB table
+    The client maps model metadata from `model.Meta` to DynamoDB table
     operations and returns validated model instances for reads/queries.
     """
 
@@ -184,11 +184,11 @@ class DynamoDB:
         """Create a client instance.
 
         Args:
-            session: Optional ``aioboto3`` session. If omitted, a new session is created.
+            session: Optional `aioboto3` session. If omitted, a new session is created.
             hash_key_types: Mapping of Python types to DynamoDB type codes.
             **kwargs: Extra keyword arguments forwarded to both
-                ``session.resource()`` and ``session.client()`` (e.g.
-                ``endpoint_url``, ``region_name``, ``config``).
+                `session.resource()` and `session.client()` (e.g.
+                `endpoint_url`, `region_name`, `config`).
         """
         self._session = session or aioboto3.Session()
         self.hash_key_types = hash_key_types
@@ -278,7 +278,7 @@ class DynamoDB:
         """Delete an item by primary key.
 
         Args:
-            model: ``DynamoModel`` subclass mapped to the target table.
+            model: `DynamoModel` subclass mapped to the target table.
             hash_key: Partition key value.
             range_key: Sort key value, when the table defines one.
             condition_expression: Optional conditional expression that must match
@@ -302,18 +302,18 @@ class DynamoDB:
         """Update an item by key and optionally return updated attributes.
 
         Args:
-            model: ``DynamoModel`` subclass mapped to the target table.
+            model: `DynamoModel` subclass mapped to the target table.
             hash_key: Partition key value.
-            update_expression: Set of ``UpdateAttr(...)`` actions describing the
+            update_expression: Set of `UpdateAttr(...)` actions describing the
                 update to apply.
             range_key: Sort key value, when the table defines one.
             condition_expression: Optional conditional expression.
             return_values: Optional DynamoDB return mode (for example,
-                ``"ALL_NEW"``). When omitted, DynamoDB default behavior applies.
+                `"ALL_NEW"`). When omitted, DynamoDB default behavior applies.
 
         Returns:
-            Validated model instance when DynamoDB returns ``Attributes``;
-            otherwise ``None``.
+            Validated model instance when DynamoDB returns `Attributes`;
+            otherwise `None`.
         """
         args: dict[str, Any] = {
             "Key": _build_key(model, hash_key=hash_key, range_key=range_key),
@@ -358,15 +358,15 @@ class DynamoDB:
         """Get a single item by primary key.
 
         Args:
-            model: ``DynamoModel`` subclass mapped to the target table.
+            model: `DynamoModel` subclass mapped to the target table.
             hash_key: Partition key value.
             range_key: Sort key value, when the table defines one.
             consistent_reads: Whether to use strongly consistent reads.
-            projection_expression: Optional list of ``ProjectionAttr(...)``
+            projection_expression: Optional list of `ProjectionAttr(...)`
                 paths to project.
 
         Returns:
-            Validated model instance when found, otherwise ``None``.
+            Validated model instance when found, otherwise `None`.
         """
         meta = model.Meta
         key = {meta.hash_key: _serialize_custom_attribute(model, meta.hash_key, hash_key)}
@@ -404,7 +404,7 @@ class DynamoDB:
         """Query items and yield paginated results.
 
         Args:
-            model: ``DynamoModel`` subclass mapped to the target table.
+            model: `DynamoModel` subclass mapped to the target table.
             index_name: Optional index name to query.
             limit: Maximum number of items to evaluate per page.
             key_condition_expression: Key condition expression for the query.
@@ -413,13 +413,13 @@ class DynamoDB:
             return_consumed_capacity: Include consumed capacity information
                 (`"TOTAL"` in DynamoDB request).
             consistent_read: Whether to use strongly consistent reads.
-            scan_index_forward: Sort ascending when ``True``, descending when
-                ``False``.
-            projection_expression: Optional list of ``ProjectionAttr(...)``
+            scan_index_forward: Sort ascending when `True`, descending when
+                `False`.
+            projection_expression: Optional list of `ProjectionAttr(...)`
                 paths to project.
 
         Yields:
-            ``QueryResult`` pages containing validated model instances.
+            `QueryResult` pages containing validated model instances.
         """
         meta = model.Meta
 
@@ -492,22 +492,22 @@ class DynamoDB:
     ) -> AsyncIterator[QueryResult[T]]:
         """Scan all items in a table (or index) and yield paginated results.
 
-        Unlike ``query``, scan reads every item in the table and applies
-        ``filter_expression`` after the read. Use sparingly on large tables.
+        Unlike `query`, scan reads every item in the table and applies
+        `filter_expression` after the read. Use sparingly on large tables.
 
         Args:
-            model: ``DynamoModel`` subclass mapped to the target table.
+            model: `DynamoModel` subclass mapped to the target table.
             index_name: Optional GSI or LSI name to scan.
             limit: Maximum number of items to evaluate per page.
             filter_expression: Optional attribute filter applied after the scan.
             exclusive_start_key: Pagination token from a previous page.
             consistent_read: Strongly consistent reads (not supported on GSIs).
             return_consumed_capacity: Include consumed capacity in the response.
-            projection_expression: Optional list of ``ProjectionAttr(...)``
+            projection_expression: Optional list of `ProjectionAttr(...)`
                 paths to project.
 
         Yields:
-            ``QueryResult`` pages containing validated model instances.
+            `QueryResult` pages containing validated model instances.
         """
         meta = model.Meta
 
@@ -559,7 +559,7 @@ class DynamoDB:
                 (`"TOTAL"` in DynamoDB request).
 
         Returns:
-            Ordered list of validated model instances or ``None`` for missing
+            Ordered list of validated model instances or `None` for missing
             items, in request order.
         """
         transact_items = []
@@ -601,8 +601,8 @@ class DynamoDB:
     ) -> TransactWriteItemsOutputTypeDef:
         """Execute up to 100 transactional write operations atomically.
 
-        Supported operations are ``TransactPut``, ``TransactDelete``,
-        ``TransactConditionCheck``, and ``TransactUpdate``.
+        Supported operations are `TransactPut`, `TransactDelete`,
+        `TransactConditionCheck`, and `TransactUpdate`.
         """
         transact_items: list[dict[str, Any]] = []
         for operation in operations:
@@ -690,7 +690,7 @@ class DynamoDB:
         *,
         return_consumed_capacity=False,
     ) -> BatchGetResult:
-        """Fetch up to 100 items using DynamoDB ``batch_get_item``.
+        """Fetch up to 100 items using DynamoDB `batch_get_item`.
 
         Results are grouped by model type and include unprocessed keys from
         DynamoDB when throttling occurs.
@@ -761,7 +761,7 @@ class DynamoDB:
         return_consumed_capacity=False,
         return_item_collection_metrics=False,
     ) -> BatchWriteResult:
-        """Write up to 25 items per request using DynamoDB ``batch_write_item``."""
+        """Write up to 25 items per request using DynamoDB `batch_write_item`."""
 
         request_items: dict[str, list[dict[str, Any]]] = {}
         for operation in operations:
@@ -798,10 +798,10 @@ class DynamoDB:
         tags: list[TagTypeDef] | None = None,
         table_class: TableClassType | None = None,
     ) -> CreateTableOutputTypeDef:
-        """Create a table for a ``DynamoModel`` definition.
+        """Create a table for a `DynamoModel` definition.
 
         Args:
-            model: ``DynamoModel`` subclass containing table metadata.
+            model: `DynamoModel` subclass containing table metadata.
             billing_mode: DynamoDB billing mode.
             provisioned_throughput: Throughput settings for provisioned mode.
             tags: Optional table tags.
@@ -809,10 +809,10 @@ class DynamoDB:
 
         Notes:
             Global secondary indexes are taken from
-            ``model.Meta.global_secondary_indexes``.
+            `model.Meta.global_secondary_indexes`.
 
         Returns:
-            Raw ``create_table`` response from the DynamoDB API.
+            Raw `create_table` response from the DynamoDB API.
         """
         meta = model.Meta
         attribute_types: dict[str, Literal["B", "N", "S"]] = {}
@@ -876,11 +876,11 @@ class DynamoDB:
         """Create a global table from an existing table.
 
         Args:
-            model: ``DynamoModel`` subclass containing table metadata.
+            model: `DynamoModel` subclass containing table metadata.
             regions: Replica regions to attach to the global table.
 
         Returns:
-            Raw ``create_global_table`` response from the DynamoDB API.
+            Raw `create_global_table` response from the DynamoDB API.
         """
         meta = model.Meta
 
@@ -894,10 +894,10 @@ class DynamoDB:
             return await client.create_global_table(**request)
 
     async def delete_table[T: DynamoModel](self, model: type[T]) -> DeleteTableOutputTypeDef:
-        """Delete the table associated with a ``DynamoModel``.
+        """Delete the table associated with a `DynamoModel`.
 
         Returns:
-            Raw ``delete_table`` response from the DynamoDB API.
+            Raw `delete_table` response from the DynamoDB API.
         """
         meta = model.Meta
         client: DynamoDBClient

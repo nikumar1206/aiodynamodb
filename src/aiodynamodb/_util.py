@@ -16,7 +16,7 @@ from aiodynamodb.projection import BuiltProjectionExpression, ProjectionExpressi
 
 
 class ConditionExpression(TypedDict, total=False):
-    """Payload fragment for DynamoDB ``ConditionExpression`` requests."""
+    """Payload fragment for DynamoDB `ConditionExpression` requests."""
 
     ConditionExpression: str
     ExpressionAttributeNames: dict[str, str]
@@ -24,7 +24,7 @@ class ConditionExpression(TypedDict, total=False):
 
 
 class KeyConditionExpression(TypedDict, total=False):
-    """Payload fragment for DynamoDB ``KeyConditionExpression`` requests."""
+    """Payload fragment for DynamoDB `KeyConditionExpression` requests."""
 
     KeyConditionExpression: str
     ExpressionAttributeNames: dict[str, str]
@@ -32,7 +32,7 @@ class KeyConditionExpression(TypedDict, total=False):
 
 
 class FilterExpression(TypedDict, total=False):
-    """Payload fragment for DynamoDB ``FilterExpression`` requests."""
+    """Payload fragment for DynamoDB `FilterExpression` requests."""
 
     FilterExpression: str
     ExpressionAttributeNames: dict[str, str]
@@ -40,7 +40,7 @@ class FilterExpression(TypedDict, total=False):
 
 
 class ProjectionExpression(TypedDict, total=False):
-    """Payload fragment for DynamoDB ``ProjectionExpression`` requests."""
+    """Payload fragment for DynamoDB `ProjectionExpression` requests."""
 
     ProjectionExpression: str
     ExpressionAttributeNames: dict[str, str]
@@ -56,7 +56,7 @@ def _build_condition_expression(
 ) -> tuple[str | None, dict[str, str] | None, dict[str, Any] | None]:
     """Build the raw expression string plus placeholder maps.
 
-    When ``expression`` is already a plain string, it is passed through and no
+    When `expression` is already a plain string, it is passed through and no
     placeholders are generated. Otherwise the custom builder expands attribute
     paths and serializes values based on the model schema.
     """
@@ -125,7 +125,7 @@ def _add_filter_expressions(
 ) -> None:
     """Merge filter expressions into an existing query argument payload.
 
-    This mutates ``query_args`` so callers can share placeholder state across
+    This mutates `query_args` so callers can share placeholder state across
     key conditions, filters, and projections.
     """
     condition, names, values = _build_condition_expression(
@@ -150,9 +150,9 @@ def _projection_expression(
 ) -> ProjectionExpression:
     """Build a request fragment for projection expressions.
 
-    When ``builder`` is supplied (e.g. a shared condition-expression builder
+    When `builder` is supplied (e.g. a shared condition-expression builder
     from the same query/scan call), the projection builder's name-placeholder
-    counter is initialised to the builder's current count so that ``#n0`` etc.
+    counter is initialised to the builder's current count so that `#n0` etc.
     never collide between the two expression fragments.
     """
     if projection_expression is None:
