@@ -35,7 +35,7 @@ async def update(
 
 ## Actions
 
-`UpdateAttr` supports four DynamoDB update actions.
+`UpdateAttr` supports the four DynamoDB update actions plus list helpers built on `SET`.
 
 ### SET
 
@@ -69,22 +69,28 @@ Remove elements from a set field:
 {UpdateAttr("roles").delete({"admin"})}
 ```
 
-## Multiple actions in one call
+### Lists: append, prepend, remove by index
 
-For lists, use `.append([...])` to append one or more elements to an existing
-list, and `.remove(index)` to remove an element by zero-based index:
+Lists are not sets: `.add()` and `.delete()` reject them. Use `.append([...])`
+or `.prepend([...])` to add elements, and `.remove(index)` to drop one by
+zero-based index:
 
 ```python
 {UpdateAttr("items").append(["new", "another"])}
+{UpdateAttr("items").prepend(["first"])}
 {UpdateAttr("items").remove(1)}
 # Equivalent removal using an indexed path:
 {UpdateAttr("items[1]").remove()}
 ```
 
-Append uses DynamoDB's `list_append` function within a `SET` clause and requires
-the target list to exist. Removal shifts subsequent elements down; removal by
-value is not supported. `.remove()` without an index removes the whole attribute.
-`.add()` and `.delete()` do not accept lists.
+Append and prepend compile to `list_append` inside a `SET` clause. A missing
+list is treated as empty, so the first append creates it; pass
+`if_not_exists=False` to require the list to already exist (DynamoDB then
+rejects the update if it is absent). Removal shifts subsequent elements down;
+removal by value is not supported. `.remove()` without an index removes the
+whole attribute.
+
+## Multiple actions in one call
 
 Pass multiple `UpdateAttr` instances in the same set:
 

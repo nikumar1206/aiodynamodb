@@ -53,15 +53,101 @@ def test_list_operands_rejected_for_set_actions(method):
 
 
 @pytest.mark.parametrize("value", ["item", {"item"}, None])
-def test_append_requires_list(value):
+@pytest.mark.parametrize("method", ["append", "prepend"])
+def test_append_requires_list(method, value):
     with pytest.raises(TypeError, match="requires a list"):
-        UpdateAttr("items").append(value)
+        getattr(UpdateAttr("items"), method)(value)
 
 
 @pytest.mark.parametrize("index, error", [(-1, ValueError), (True, TypeError), (1.5, TypeError), ("1", TypeError)])
 def test_remove_rejects_invalid_list_index(index, error):
     with pytest.raises(error):
         UpdateAttr("items").remove(index)
+
+
+def test_remove_rejects_index_on_already_indexed_path():
+    with pytest.raises(ValueError, match="already ends with a list index"):
+        UpdateAttr("items[0]").remove(1)
+
+
+@pytest.mark.parametrize("initial", [None, ["a"]])
+@pytest.mark.parametrize("method, expected", [("append", ["a", "b", "c"]), ("prepend", ["b", "c", "a"])])
+async def test_append_prepend_create_missing_list_by_default(db, initial, method, expected):
+    @table("list_append_defaults")
+    class Tagged(DynamoModel):
+        item_id: HashKey[str]
+        tags: list[str] | None = None
+
+    await db.create_table(Tagged)
+    await db.put(Tagged(item_id="i1", tags=initial))
+
+    updated = await db.update(
+        Tagged,
+        hash_key="i1",
+        update_expression={getattr(UpdateAttr("tags"), method)(["b", "c"])},
+        return_values="ALL_NEW",
+    )
+
+    assert updated is not None
+    assert updated.tags == (expected if initial else ["b", "c"])
+
+
+async def test_append_if_not_exists_false_requires_existing_list(db):
+    @table("list_append_strict")
+    class Tagged(DynamoModel):
+        item_id: HashKey[str]
+        tags: list[str] | None = None
+
+    await db.create_table(Tagged)
+    await db.put(Tagged(item_id="i1"))
+
+    ex = await db.exceptions()
+    with pytest.raises(ex.ClientError):
+        await db.update(
+            Tagged,
+            hash_key="i1",
+            update_expression={UpdateAttr("tags").append(["a"], if_not_exists=False)},
+        )
+
+
+def test_append_and_prepend_expression_shapes():
+    from aiodynamodb.updates import UpdateExpressionBuilder
+
+    appended = UpdateExpressionBuilder(ComplexOrder).build_update_expression({UpdateAttr("basket.items").append([])})
+    assert appended.update_expression == "SET #n0.#n1 = list_append(if_not_exists(#n0.#n1, :v1), :v0)"
+    assert appended.expression_attribute_values == {":v0": [], ":v1": []}
+
+    strict = UpdateExpressionBuilder(ComplexOrder).build_update_expression({
+        UpdateAttr("basket.items").prepend([], if_not_exists=False)
+    })
+    assert strict.update_expression == "SET #n0.#n1 = list_append(:v0, #n0.#n1)"
+
+
+async def test_append_omits_none_fields_like_put(db):
+    from pydantic import BaseModel
+
+    class Sub(BaseModel):
+        a: int
+        b: str | None = None
+
+    @table("list_append_none")
+    class Holder(DynamoModel):
+        item_id: HashKey[str]
+        subs: list[Sub] = []
+
+    await db.create_table(Holder)
+    await db.put(Holder(item_id="i1", subs=[Sub(a=1)]))
+    await db.update(Holder, hash_key="i1", update_expression={UpdateAttr("subs").append([Sub(a=2)])})
+
+    raw_table = await db._table("list_append_none")
+    raw = (await raw_table.get_item(Key={"item_id": "i1"}))["Item"]
+    assert raw["subs"] == [{"a": 1}, {"a": 2}]
+
+
+@pytest.mark.parametrize("method", ["add", "delete"])
+def test_frozenset_accepted_for_set_actions(method):
+    attr = getattr(UpdateAttr("tags"), method)(frozenset({"a"}))
+    assert attr.value == frozenset({"a"})
 
 
 async def test_update_supports_high_level_update_expression(db):

@@ -171,7 +171,10 @@ def _serialize_custom_attribute(model: type[BaseModel], field_name: str, field_v
         adapter = TypeAdapter(key_type)
         _type_adapter_cache[cache_key] = adapter
 
-    return cast(str | int, adapter.serializer.to_python(field_value))
+    # ``exclude_none`` keeps nested models consistent with ``DynamoModel.to_dynamo``
+    # (``model_dump(exclude_none=True)``) so updates never store NULL attributes
+    # where a put would have omitted them.
+    return cast(str | int, adapter.serializer.to_python(field_value, exclude_none=True))
 
 
 def _extract_nested_model(annotation: Any) -> type[BaseModel] | None:
