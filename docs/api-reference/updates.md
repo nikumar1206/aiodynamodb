@@ -28,26 +28,57 @@ UpdateAttr("address.city").set("New York")
 UpdateAttr("basket.items[1].qty").set(9)
 ```
 
-#### `.remove() -> UpdateAttr`
+#### `.append(value: list[Any], *, if_not_exists: bool = True) -> UpdateAttr`
+
+Append elements to a list using `SET path = list_append(path, value)`.
+Pass a list, even when appending a single element. By default a missing list is
+treated as empty (`list_append(if_not_exists(path, :empty), value)`), so the
+first append creates it. Pass `if_not_exists=False` to require the list to
+already exist.
+
+```python
+UpdateAttr("basket.items").append([Item(qty=1, price=2.5, name="new")])
+UpdateAttr("basket.items").append([item], if_not_exists=False)
+```
+
+#### `.prepend(value: list[Any], *, if_not_exists: bool = True) -> UpdateAttr`
+
+Prepend elements to a list using `SET path = list_append(value, path)`. Same
+semantics as `.append()` otherwise.
+
+```python
+UpdateAttr("basket.items").prepend([Item(qty=1, price=2.5, name="first")])
+```
+
+#### `.remove(index: int | None = None) -> UpdateAttr`
 
 Remove the attribute entirely (equivalent to DynamoDB `REMOVE`).
 
 ```python
 UpdateAttr("email").remove()
+UpdateAttr("basket.items").remove(1)
+UpdateAttr("basket.items[1]").remove()  # equivalent indexed removal
 ```
 
-#### `.add(value: Any) -> UpdateAttr`
+List elements are removed by zero-based, non-negative index, not by value.
+Subsequent elements shift down. Omitting the index removes the whole attribute.
+Passing an index when the path already ends in one (`UpdateAttr("items[0]").remove(1)`)
+raises `ValueError`.
 
-Add a number to a numeric attribute, or add elements to a DynamoDB set.
+#### `.add(value: int | float | Decimal | Set[Any]) -> UpdateAttr`
+
+Add a number to a numeric attribute, or add elements to a DynamoDB set (`set` or `frozenset`).
+List operands are rejected; use `.append([...])` for lists.
 
 ```python
 UpdateAttr("login_count").add(1)
 UpdateAttr("tags").add({"new-tag"})
 ```
 
-#### `.delete(value: Any) -> UpdateAttr`
+#### `.delete(value: Set[Any]) -> UpdateAttr`
 
-Remove elements from a DynamoDB set attribute.
+Remove elements from a DynamoDB set attribute (`set` or `frozenset`).
+List operands are rejected; use `.remove(index)` for list elements.
 
 ```python
 UpdateAttr("roles").delete({"admin"})
@@ -64,7 +95,7 @@ UpdateAttr("roles").delete({"admin"})
 
 ### Hashing
 
-`UpdateAttr` instances are used in `set[UpdateAttr]`, so they are hashable. The hash is based on `(action_type, attribute_name, frozen_value)`.
+`UpdateAttr` instances are used in `set[UpdateAttr]`, so they are hashable. The hash is based on the action type, attribute path, list-operation flags, and a frozen copy of the value.
 
 ---
 
@@ -79,6 +110,8 @@ class Action(Enum):
 ```
 
 The action type set on an `UpdateAttr` after calling one of its action methods.
+Values map 1:1 to DynamoDB update clauses; `.append()` and `.prepend()` are
+`SET` actions that compile to `list_append`.
 
 ---
 

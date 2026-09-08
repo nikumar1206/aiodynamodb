@@ -13,7 +13,7 @@ _UNIX_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 def _timestamp_microseconds(value: datetime) -> int:
     """Return exact microseconds since the Unix epoch.
 
-    ``datetime.timestamp()`` returns a float, which loses precision when it is
+    `datetime.timestamp()` returns a float, which loses precision when it is
     scaled to nanoseconds. Naive datetimes retain Python's usual local-time
     interpretation before conversion to UTC.
     """
@@ -24,7 +24,7 @@ def _timestamp_microseconds(value: datetime) -> int:
 
 
 def _truncate_division(value: int, divisor: int) -> int:
-    """Divide an integer toward zero, matching ``int(datetime.timestamp())``."""
+    """Divide an integer toward zero, matching `int(datetime.timestamp())`."""
     if value >= 0:
         return value // divisor
     return -((-value) // divisor)

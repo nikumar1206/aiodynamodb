@@ -23,16 +23,16 @@ async def mock_dynamodb(
     """Async context manager that provides a mocked DynamoDB instance for testing.
 
     Starts the aiomoto mock, creates tables for all provided models, and yields
-    a ready-to-use ``DynamoDB`` instance.
+    a ready-to-use `DynamoDB` instance.
 
-    Requires the ``testing`` optional dependency:
+    Requires the `testing` optional dependency:
         pip install aiodynamodb[testing]
 
     Args:
-        *models: ``DynamoModel`` subclasses whose tables should be created.
-        patch_env: When ``True`` (default), overrides AWS environment variables
+        *models: `DynamoModel` subclasses whose tables should be created.
+        patch_env: When `True` (default), overrides AWS environment variables
             with fake credentials for the duration of the context. Set to
-            ``False`` if you manage credentials yourself.
+            `False` if you manage credentials yourself.
 
     Example:
         async with mock_dynamodb(User, Order) as db:

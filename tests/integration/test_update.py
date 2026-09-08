@@ -215,3 +215,60 @@ async def test_update_supports_enum_range_key(db):
     )
 
     assert updated == UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob Updated")
+
+
+async def test_update_list_append_prepend_and_remove_by_index(db):
+    """list_append/if_not_exists and indexed REMOVE against a real DynamoDB endpoint."""
+    from pydantic import BaseModel as PydanticModel
+
+    from aiodynamodb import DynamoModel, HashKey, table
+
+    class Line(PydanticModel):
+        sku: str
+        note: str | None = None
+
+    @table("it_list_ops")
+    class Cart(DynamoModel):
+        cart_id: HashKey[str]
+        lines: list[Line] | None = None
+
+    await db.create_table(Cart)
+    try:
+        await db.put(Cart(cart_id="c1"))
+
+        # First append creates the list; None fields are omitted, matching put().
+        created = await db.update(
+            Cart,
+            hash_key="c1",
+            update_expression={UpdateAttr("lines").append([Line(sku="a")])},
+            return_values="ALL_NEW",
+        )
+        assert created is not None and created.lines == [Line(sku="a")]
+
+        prepended = await db.update(
+            Cart,
+            hash_key="c1",
+            update_expression={UpdateAttr("lines").prepend([Line(sku="z", note="first")])},
+            return_values="ALL_NEW",
+        )
+        assert prepended is not None and [line.sku for line in prepended.lines] == ["z", "a"]
+
+        removed = await db.update(
+            Cart,
+            hash_key="c1",
+            update_expression={UpdateAttr("lines").remove(0)},
+            return_values="ALL_NEW",
+        )
+        assert removed is not None and removed.lines == [Line(sku="a")]
+
+        # Strict mode: DynamoDB rejects list_append on a missing attribute.
+        await db.put(Cart(cart_id="c2"))
+        ex = await db.exceptions()
+        with pytest.raises(ex.ClientError):
+            await db.update(
+                Cart,
+                hash_key="c2",
+                update_expression={UpdateAttr("lines").append([Line(sku="a")], if_not_exists=False)},
+            )
+    finally:
+        await db.delete_table(Cart)

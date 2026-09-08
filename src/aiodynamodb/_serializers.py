@@ -28,7 +28,7 @@ def _resolve_key_annotation(annotation: Any) -> type:
     origin = get_origin(annotation)
     if origin is None:
         return annotation
-    # Preserve container types like ``set[str]`` while unwrapping Annotated metadata.
+    # Preserve container types like `set[str]` while unwrapping Annotated metadata.
     if origin == typing.Annotated:
         annotated_args = get_args(annotation)
         if annotated_args:
@@ -42,10 +42,10 @@ def _resolve_key_annotation(annotation: Any) -> type:
 def _serialize_dynamo_primitives(value: Any) -> Any:
     """Recursively coerce Python values into forms boto3 can serialize.
 
-    - ``Enum`` -> its recursively normalized value
-    - ``float`` → ``Decimal`` (DynamoDB Number requires Decimal)
-    - ``datetime`` → ISO-8601 string (DynamoDB has no native datetime type)
-    - ``tuple`` → list
+    - `Enum` -> its recursively normalized value
+    - `float` → `Decimal` (DynamoDB Number requires Decimal)
+    - `datetime` → ISO-8601 string (DynamoDB has no native datetime type)
+    - `tuple` → list
 
     DynamoDB maps require string keys, and sets must be non-empty and contain
     values of one scalar DynamoDB type.
@@ -114,7 +114,7 @@ class DynamoSerializer:
 
 
 def _unwrap_binary(value: Any) -> Any:
-    """Recursively convert boto3 ``Binary`` wrappers to plain ``bytes``."""
+    """Recursively convert boto3 `Binary` wrappers to plain `bytes`."""
     if isinstance(value, Binary):
         return bytes(value)  # type: ignore[call-overload]
     if isinstance(value, list):
@@ -171,7 +171,10 @@ def _serialize_custom_attribute(model: type[BaseModel], field_name: str, field_v
         adapter = TypeAdapter(key_type)
         _type_adapter_cache[cache_key] = adapter
 
-    return cast(str | int, adapter.serializer.to_python(field_value))
+    # `exclude_none` keeps nested models consistent with `DynamoModel.to_dynamo`
+    # (`model_dump(exclude_none=True)`) so updates never store NULL attributes
+    # where a put would have omitted them.
+    return cast(str | int, adapter.serializer.to_python(field_value, exclude_none=True))
 
 
 def _extract_nested_model(annotation: Any) -> type[BaseModel] | None:
