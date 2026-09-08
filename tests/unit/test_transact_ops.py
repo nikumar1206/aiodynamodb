@@ -150,7 +150,7 @@ async def test_transact_write_update_supports_nested_field_paths(db):
             ComplexOrder,
             hash_key="o1",
             range_key=created_at,
-            update_expression={UpdateAttr("basket.items.qty").set(8)},
+            update_expression={UpdateAttr("basket.items[0].qty").set(8)},
         )
     ])
 

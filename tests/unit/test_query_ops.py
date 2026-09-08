@@ -209,7 +209,7 @@ async def test_query_supports_projection_expression_with_filter(db):
     async for page in db.query(
         ComplexOrder,
         key_condition_expression=Key("order_id").eq("o1"),
-        filter_expression=Attr("basket.items.qty").eq(1),
+        filter_expression=Attr("basket.items[0].qty").eq(1),
     ):
         projected.extend(page.items)
 
@@ -235,7 +235,7 @@ async def test_deep_filter(db):
     async for page in db.query(
         ComplexOrder,
         key_condition_expression=Key("order_id").eq("o1"),
-        filter_expression=Attr("basket.items.qty").gt(1),
+        filter_expression=Attr("basket.items[0].qty").gt(1),
         scan_index_forward=True,
     ):
         filtered.extend(page.items)

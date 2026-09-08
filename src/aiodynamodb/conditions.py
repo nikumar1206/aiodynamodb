@@ -98,9 +98,11 @@ class CustomConditionExpressionBuilder[T: BaseModel](ConditionExpressionBuilder)
             has_explicit_index = "[" in part
             has_next = index < len(parts) - 1
             if has_next and self._is_sequence_annotation(annotation) and not has_explicit_index:
-                normalized_parts.append(f"{field_name}[0]")
-            else:
-                normalized_parts.append(part)
+                raise ValueError(
+                    f"Path '{attribute_name}' traverses list field '{field_name}' without an index; "
+                    f"use an explicit index such as '{field_name}[0]'"
+                )
+            normalized_parts.append(part)
             current_model = self._extract_nested_model(annotation)
 
         return ".".join(normalized_parts)

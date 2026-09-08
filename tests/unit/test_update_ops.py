@@ -192,7 +192,7 @@ async def test_update_supports_nested_field_paths(db):
         ComplexOrder,
         hash_key="o1",
         range_key=created_at,
-        update_expression={UpdateAttr("basket.items.qty").set(7)},
+        update_expression={UpdateAttr("basket.items[0].qty").set(7)},
         return_values="ALL_NEW",
     )
 
@@ -396,3 +396,88 @@ async def test_update_supports_enum_range_key(db):
     )
 
     assert updated == UserVersion(user_id="u1", user_type=UserTypeT.foo, name="Bob Updated")
+
+
+def test_update_rejects_list_traversal_without_index():
+    from aiodynamodb.updates import UpdateExpressionBuilder
+
+    with pytest.raises(ValueError, match="without an index"):
+        UpdateExpressionBuilder(ComplexOrder).build_update_expression([UpdateAttr("basket.items.qty").set(1)])
+
+
+@pytest.mark.parametrize(
+    "first, second",
+    [
+        ("name", "name"),
+        ("basket.items", "basket.items[0]"),
+        ("basket.items[0].qty", "basket"),
+    ],
+)
+def test_update_rejects_overlapping_paths(first, second):
+    from aiodynamodb.updates import UpdateExpressionBuilder
+
+    with pytest.raises(ValueError, match="overlapping paths"):
+        UpdateExpressionBuilder(ComplexOrder).build_update_expression([
+            UpdateAttr(first).set(1),
+            UpdateAttr(second).set(2),
+        ])
+
+
+def test_update_allows_sibling_paths():
+    from aiodynamodb.updates import UpdateExpressionBuilder
+
+    built = UpdateExpressionBuilder(ComplexOrder).build_update_expression([
+        UpdateAttr("basket.items[0].qty").set(1),
+        UpdateAttr("basket.items[1].qty").set(2),
+        UpdateAttr("total").add(1),
+    ])
+    assert built.update_expression == "SET #n0.#n1[0].#n2 = :v0, #n3.#n4[1].#n5 = :v1 ADD #n6 :v2"
+
+
+def test_update_rejects_empty_and_actionless_expressions():
+    from aiodynamodb.updates import UpdateExpressionBuilder
+
+    with pytest.raises(ValueError, match="at least one"):
+        UpdateExpressionBuilder(User).build_update_expression([])
+    with pytest.raises(ValueError, match="has no action"):
+        UpdateExpressionBuilder(User).build_update_expression([UpdateAttr("name")])
+
+
+def test_update_expression_accepts_list_and_preserves_order():
+    from aiodynamodb.updates import UpdateExpressionBuilder
+
+    built = UpdateExpressionBuilder(User).build_update_expression([
+        UpdateAttr("email").set("b@example.com"),
+        UpdateAttr("name").set("Bob"),
+    ])
+    assert built.update_expression == "SET #n0 = :v0, #n1 = :v1"
+    assert built.expression_attribute_names == {"#n0": "email", "#n1": "name"}
+
+
+async def test_update_accepts_list_of_actions(db):
+    await db.put(User(user_id="u1", name="Alice"))
+    updated = await db.update(
+        User,
+        hash_key="u1",
+        update_expression=[UpdateAttr("name").set("Bob"), UpdateAttr("email").set("bob@example.com")],
+        return_values="ALL_NEW",
+    )
+    assert updated == User(user_id="u1", name="Bob", email="bob@example.com")
+
+
+@pytest.mark.parametrize("existing, expected", [(None, "first@example.com"), ("keep@example.com", "keep@example.com")])
+async def test_set_if_not_exists(db, existing, expected):
+    await db.put(User(user_id="u1", name="Alice", email=existing))
+    updated = await db.update(
+        User,
+        hash_key="u1",
+        update_expression=[UpdateAttr("email").set("first@example.com", if_not_exists=True)],
+        return_values="ALL_NEW",
+    )
+    assert updated is not None
+    assert updated.email == expected
+
+
+def test_set_if_not_exists_rejects_none():
+    with pytest.raises(ValueError, match="use remove"):
+        UpdateAttr("email").set(None, if_not_exists=True)

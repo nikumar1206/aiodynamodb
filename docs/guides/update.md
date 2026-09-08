@@ -24,14 +24,14 @@ async def update(
     model: type[T],
     *,
     hash_key: KeyT,
-    update_expression: set[UpdateAttr],
+    update_expression: Collection[UpdateAttr],
     range_key: KeyT | None = None,
     condition_expression: ConditionBase | None = None,
     return_values: ReturnValues | None = None,
 ) -> T | None
 ```
 
-`update_expression` is a `set` of `UpdateAttr` actions. Returns a validated model instance when `return_values` causes DynamoDB to return attributes; otherwise returns `None`.
+`update_expression` is any collection of `UpdateAttr` actions — a `list` keeps the compiled clause order deterministic, a `set` also works. Each action must target a distinct, non-overlapping document path (`items` and `items[0]` in the same call is rejected with `ValueError` before the request is sent). Returns a validated model instance when `return_values` causes DynamoDB to return attributes; otherwise returns `None`.
 
 ## Actions
 
@@ -43,6 +43,13 @@ Set a field to a value:
 
 ```python
 {UpdateAttr("name").set("Alice Smith")}
+```
+
+Pass `if_not_exists=True` to write the value only when the attribute is
+currently absent — handy for "created_at"-style fields or defaults:
+
+```python
+{UpdateAttr("created_at").set(now, if_not_exists=True)}
 ```
 
 ### REMOVE
