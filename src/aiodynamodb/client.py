@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator, Collection
 from contextlib import asynccontextmanager
 from datetime import datetime
 from enum import IntEnum, StrEnum
-from typing import Any, Literal, Self, assert_never, cast
+from typing import Any, Literal, Self, assert_never, cast, get_args, get_origin
 
 import aioboto3
 from aioboto3.session import ResourceCreatorContext
@@ -82,6 +82,11 @@ _KEY_TO_TYPE = {
 def _key_attribute_type(annotation: Any, key_types: dict[Any, str]) -> Literal["B", "N", "S"] | None:
     if annotation in key_types:
         return cast(Literal["B", "N", "S"], key_types[annotation])
+    if get_origin(annotation) is Literal:
+        attribute_types = {_key_attribute_type(type(value), key_types) for value in get_args(annotation)}
+        if len(attribute_types) == 1:
+            return attribute_types.pop()
+        return None
     if not isinstance(annotation, type):
         return None
     for key_type, attribute_type in key_types.items():

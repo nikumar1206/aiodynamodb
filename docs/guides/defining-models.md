@@ -51,12 +51,20 @@ The `hash_key` and `range_key` fields can be typed as:
 | `datetime` | String (S) — ISO format |
 | `IntEnum` subclasses | Number (N) |
 | `StrEnum` subclasses | String (S) |
+| `Literal[...]` | Type inferred from its values; all must map to the same supported DynamoDB key type |
 | `Timestamp` | Number (N) — Unix seconds |
 | `TimestampMillis` | Number (N) — Unix milliseconds |
 | `TimestampMicros` | Number (N) — Unix microseconds |
 | `TimestampNanos` | Number (N) — Unix nanoseconds |
 
 See [Custom Types](../guides/custom-types.md) for timestamp and JSON field details.
+
+Literal keys work with both decorator arguments and key annotations, for example
+`pk: HashKey[Literal["user"]]` and `sk: RangeKey[Literal[1, 2]]` (import
+`Literal` from `typing`). They also work as secondary index keys. Mixed DynamoDB
+types such as `Literal["user", 1]`, and unsupported values such as booleans or
+`None`, are rejected during table creation. Pydantic retains the literal constraints
+when validating model instances.
 
 Enum key fields should inherit from `enum.IntEnum` or `enum.StrEnum`:
 
