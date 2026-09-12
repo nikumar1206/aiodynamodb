@@ -1,6 +1,90 @@
+from typing import Literal
+
 import pytest
+from boto3.dynamodb.conditions import Key
+from pydantic import ValidationError, create_model
 
 from aiodynamodb import DynamoModel, HashKey, RangeKey, table
+from aiodynamodb.models import GSI, LSI
+from tests.unit.entities import UserStatusT, UserTypeT
+
+
+@pytest.mark.parametrize("key_name", ["pk", "sk"])
+@pytest.mark.parametrize(
+    ("annotation", "values", "attribute_type"),
+    [
+        (Literal["fixed"], ["fixed"], "S"),
+        (Literal["foo", "bar"], ["foo", "bar"], "S"),
+        (Literal[1, 2], [1, 2], "N"),
+        (Literal[b"foo", b"bar"], [b"foo", b"bar"], "B"),
+        (Literal[UserTypeT.foo, UserTypeT.bar], [UserTypeT.foo, UserTypeT.bar], "N"),
+        (Literal[UserStatusT.active], [UserStatusT.active], "S"),
+    ],
+)
+async def test_literal_keys_roundtrip(db, key_name, annotation, values, attribute_type):
+    fields = {"pk": (str, ...), "sk": (str, ...)}
+    fields[key_name] = (annotation, ...)
+    model = table("literal_keys", hash_key="pk", range_key="sk")(
+        create_model("LiteralKeys", __base__=DynamoModel, **fields)
+    )
+    response = await db.create_table(model)
+    definitions = {
+        entry["AttributeName"]: entry["AttributeType"] for entry in response["TableDescription"]["AttributeDefinitions"]
+    }
+    assert definitions[key_name] == attribute_type
+
+    for value in values:
+        keys = {"pk": "fixed", "sk": "fixed", key_name: value}
+        item = model(**keys)
+        await db.put(item)
+        assert await db.get(model, hash_key=keys["pk"], range_key=keys["sk"]) == item
+        results = [
+            result
+            async for page in db.query(
+                model, key_condition_expression=Key("pk").eq(keys["pk"]) & Key("sk").eq(keys["sk"])
+            )
+            for result in page.items
+        ]
+        assert results == [item]
+        await db.delete(model, hash_key=keys["pk"], range_key=keys["sk"])
+        assert await db.get(model, hash_key=keys["pk"], range_key=keys["sk"]) is None
+
+
+async def test_literal_key_annotations_and_indexes(db):
+    @table(
+        "literal_indexes",
+        indexes=[GSI("by_kind", hash_key="kind", range_key="version"), LSI("by_version", range_key="version")],
+    )
+    class Item(DynamoModel):
+        pk: HashKey[Literal["item"]] = "item"
+        sk: RangeKey[Literal[1, 2]]
+        kind: Literal["record"] = "record"
+        version: Literal[1, 2] = 1
+
+    response = await db.create_table(Item)
+    definitions = {
+        entry["AttributeName"]: entry["AttributeType"] for entry in response["TableDescription"]["AttributeDefinitions"]
+    }
+    assert definitions == {"pk": "S", "sk": "N", "kind": "S", "version": "N"}
+    item = Item(sk=1)
+    await db.put(item)
+    assert await db.get(Item, hash_key="item", range_key=1) == item
+    with pytest.raises(ValidationError):
+        Item(sk=3)
+
+
+@pytest.mark.parametrize("key_name", ["pk", "sk"])
+@pytest.mark.parametrize(
+    "annotation", [Literal[True], Literal[None], Literal["foo", 1], Literal[1, True], Literal["foo", None]]
+)
+async def test_create_table_rejects_unsupported_literal_keys(db, key_name, annotation):
+    fields = {"pk": (str, ...), "sk": (str, ...)}
+    fields[key_name] = (annotation, ...)
+    model = table("bad_literal_keys", hash_key="pk", range_key="sk")(
+        create_model("BadLiteralKeys", __base__=DynamoModel, **fields)
+    )
+    with pytest.raises(TypeError, match=f"Unsupported key type for field '{key_name}'"):
+        await db.create_table(model)
 
 
 async def test_create_table_supports_optional_settings_and_delete_table(db):
